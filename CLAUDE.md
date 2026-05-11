@@ -1,5 +1,10 @@
 # SC Combat Simulator — Contexto para Claude Code
 
+## Historial activo
+Consultar `AI_CHANGELOG.md` para ver los cambios recientes, decisiones de
+simulacion y verificaciones. Si alguna formula o ejemplo de este archivo queda
+desactualizado, `AI_CHANGELOG.md` tiene prioridad como memoria historica.
+
 ## Qué es este proyecto
 Simulador de combate entre naves de Star Citizen. El usuario configura dos naves,
 elige modo y duración, y el motor calcula el resultado con gráficas y eventos detallados.

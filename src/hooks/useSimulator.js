@@ -22,7 +22,6 @@ const DEFAULT_CONFIG = {
   simCount:    10,
   initialRangeKm: 1.5,
   randomRangePerSim: false,
-  detectionRangeKm: 20.0,
 }
 
 export function useSimulator() {
@@ -60,7 +59,6 @@ export function useSimulator() {
         const initialRangeM = config.randomRangePerSim
           ? clampRangeM(baseRangeM * seededUniform(seed, 0.5, 1.5))
           : clampRangeM(baseRangeM)
-        const detectionRangeM = clampDetectionM((Number(config.detectionRangeKm) || 20.0) * 1000)
         const outcome = runSimulation({
           shipA,
           shipB,
@@ -71,7 +69,6 @@ export function useSimulator() {
           pilotSkillB:  config.pilotSkillB,
           seed,
           initialRangeM,
-          detectionRangeM,
         })
 
         return {
@@ -130,6 +127,8 @@ function buildSummary(runs) {
   const avgDuration = avg(runs.map(r => r.durationSec))
   const avgHullPctA = avg(runs.map(r => r.stats.a.hullPct))
   const avgHullPctB = avg(runs.map(r => r.stats.b.hullPct))
+  const avgTotalHpPctA = avg(runs.map(r => r.stats.a.totalHpPct ?? totalHpPctForRun(r, 'a')))
+  const avgTotalHpPctB = avg(runs.map(r => r.stats.b.totalHpPct ?? totalHpPctForRun(r, 'b')))
   const avgEffDpsA = avg(runs.map(r => r.stats.a.effectiveDps))
   const avgEffDpsB = avg(runs.map(r => r.stats.b.effectiveDps))
 
@@ -141,21 +140,26 @@ function buildSummary(runs) {
     avgDuration,
     avgHullPctA,
     avgHullPctB,
+    avgTotalHpPctA,
+    avgTotalHpPctB,
     avgEffDpsA,
     avgEffDpsB,
   }
 }
 
+function totalHpPctForRun(run, side) {
+  const stats = run.stats[side]
+  const ship = side === 'a' ? run.shipA : run.shipB
+  const totalRemaining = (Number(stats.hullRemaining) || 0) + (Number(stats.shieldRemaining) || 0)
+  const totalMax = (Number(ship?.hullMax) || 0) + (Number(ship?.shieldMax) || 0)
+  if (totalMax <= 0) return 0
+  return Math.round((totalRemaining / totalMax) * 100)
+}
+
 function clampRangeM(m) {
   const v = Number(m)
   if (!Number.isFinite(v)) return 1500
-  return Math.min(4000, Math.max(300, v))
-}
-
-function clampDetectionM(m) {
-  const v = Number(m)
-  if (!Number.isFinite(v)) return 20000
-  return Math.min(20000, Math.max(200, v))
+  return Math.min(40000, Math.max(300, v))
 }
 
 function seededUniform(seed, min, max) {

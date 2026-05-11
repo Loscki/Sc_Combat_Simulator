@@ -347,10 +347,18 @@ export const SHIPS = {
 // En Star Citizen la detección depende del radar/sensores del atacante y de las firmas del objetivo (EM/IR/CS).
 // Para no “ensuciar” cada entrada con datos inventados, aplicamos defaults coherentes si faltan campos.
 const SIZE_DEFAULTS = {
-  XS: { sigCS: 0.60, radarStrength: 0.95 },
+  XS: { sigCS: 0.55, radarStrength: 0.92 },
   S:  { sigCS: 1.00, radarStrength: 1.00 },
-  M:  { sigCS: 1.60, radarStrength: 1.10 },
-  L:  { sigCS: 2.40, radarStrength: 1.20 },
+  M:  { sigCS: 1.70, radarStrength: 1.12 },
+  L:  { sigCS: 2.60, radarStrength: 1.25 },
+}
+
+const ROLE_SENSOR_BONUS = {
+  'Recon Fighter': 0.18,
+  'Bounty Hunter': 0.10,
+  'Interceptor': 0.06,
+  'Heavy Fighter': 0.04,
+  'Stealth Fighter': 0.03,
 }
 
 function clamp(min, v, max) {
@@ -360,16 +368,36 @@ function clamp(min, v, max) {
 function withSensorDefaults(ship) {
   const size = ship.size || 'S'
   const d = SIZE_DEFAULTS[size] ?? SIZE_DEFAULTS.S
+  const role = ship.role || ''
+  const isStealth = /stealth|ghost|qi/i.test(`${role} ${ship.name}`)
 
   // radarStrength: capacidad de sensores de la nave (1.0 = “estándar”)
-  const radarStrength = ship.radarStrength ?? d.radarStrength
+  const roleSensorBonus = ROLE_SENSOR_BONUS[role] ?? 0
+  const radarStrength = ship.radarStrength
+    ?? clamp(0.75, d.radarStrength + roleSensorBonus + ((ship.hardpoints?.S3 ?? 0) * 0.01), 1.55)
 
-  // Firmas relativas (1.0 = medio). Heurística: más DPS y más velocidad tienden a subir EM/IR.
-  const sigEM = ship.sigEM ?? clamp(0.55, 0.70 + (ship.dps ?? 0) / 450 + (ship.speedBoost ?? 0) / 4000, 1.60)
-  const sigIR = ship.sigIR ?? clamp(0.55, 0.65 + (ship.shieldRegen ?? 0) / 220 + (ship.speedSCM ?? 0) / 800, 1.60)
-  const sigCS = ship.sigCS ?? d.sigCS
+  // Firmas relativas (1.0 = medio). Se derivan de componentes/estado stock:
+  // EM: armas, escudos y generacion electrica; IR: motores/calor; CS: tamano fisico.
+  const stealthEMIR = isStealth ? 0.72 : 1
+  const stealthCS = isStealth ? 0.85 : 1
+  const sigEM = ship.sigEM ?? clamp(
+    0.35,
+    (0.45 + (ship.dps ?? 0) / 360 * 0.45 + (ship.shieldRegen ?? 0) / 120 * 0.18 + (ship.shieldMax ?? 0) / 1800 * 0.12) * stealthEMIR,
+    2.20
+  )
+  const sigIR = ship.sigIR ?? clamp(
+    0.35,
+    (0.45 + (ship.speedSCM ?? 0) / 280 * 0.24 + (ship.speedBoost ?? 0) / 1500 * 0.22 + (ship.dps ?? 0) / 500 * 0.14) * stealthEMIR,
+    2.20
+  )
+  const sigCS = ship.sigCS ?? clamp(
+    0.35,
+    (d.sigCS + (ship.hullMax ?? 0) / 4000 * 0.20 + (ship.shieldMax ?? 0) / 4000 * 0.12 - (ship.evasion ?? 0.25) * 0.15) * stealthCS,
+    3.50
+  )
+  const signatureProfile = clamp(0.30, 0.42 * sigEM + 0.33 * sigIR + 0.25 * sigCS, 3.00)
 
-  return { ...ship, radarStrength, sigEM, sigIR, sigCS }
+  return { ...ship, radarStrength, sigEM, sigIR, sigCS, signatureProfile }
 }
 
 Object.keys(SHIPS).forEach((id) => {

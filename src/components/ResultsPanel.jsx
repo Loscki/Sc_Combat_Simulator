@@ -27,7 +27,7 @@ function getTag(winner, side) {
 }
 
 export function ResultsPanel({ result, onReset }) {
-  const { winner, durationSec, stats, shipA, shipB, mergeCount, initialRangeMUsed } = result
+  const { winner, durationSec, stats, shipA, shipB, mergeCount, initialRangeMUsed, detection } = result
   const tagA = getTag(winner, 'a')
   const tagB = getTag(winner, 'b')
 
@@ -70,6 +70,11 @@ export function ResultsPanel({ result, onReset }) {
           sub="Inicio del combate"
         />
         <MetricCard
+          label="Detección"
+          value={`${((detection?.a?.rangeM ?? 0) / 1000).toFixed(1)} / ${((detection?.b?.rangeM ?? 0) / 1000).toFixed(1)} km`}
+          sub={`${shipA.name} / ${shipB.name}`}
+        />
+        <MetricCard
           label="Merges"
           value={mergeCount ?? 0}
           sub="Cruces a 600m"
@@ -84,13 +89,23 @@ export function ResultsPanel({ result, onReset }) {
           value={stats.b.effectiveDps}
           sub={`Teórico: ${stats.b.theoreticalDps}`}
         />
+        <MetricCard
+          label="Disparos"
+          value={`${stats.a.shotsFired} / ${stats.b.shotsFired}`}
+          sub={`${shipA.name} / ${shipB.name}`}
+        />
+        <MetricCard
+          label="Impactos"
+          value={`${stats.a.hits} / ${stats.b.hits}`}
+          sub={`${stats.a.hitPct}% / ${stats.b.hitPct}% acierto`}
+        />
       </div>
 
       <div className="metrics-grid">
         <MetricCard
-          label="HP restante"
+          label="Casco restante"
           value={`${stats.a.hullPct}% / ${stats.b.hullPct}%`}
-          sub={`${shipA.name} / ${shipB.name}`}
+          sub={`Hasta destrucción · HP+escudo: ${stats.a.totalHpPct}% / ${stats.b.totalHpPct}%`}
         />
       </div>
 

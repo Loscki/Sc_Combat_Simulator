@@ -28,6 +28,8 @@ export function ShipCard({ ship, shipId, ships, side, onSelectShip }) {
     { label: 'Regen/s',   value: ship.shieldRegen,max: 100,   pct: ship.shieldRegen / 100, col: shield },
     { label: 'Precisión', value: `${Math.round(ship.accuracy * 100)}%`, pct: ship.accuracy, col: '#BA7517' },
     { label: 'Evasión',   value: `${Math.round(ship.evasion * 100)}%`,  pct: ship.evasion,  col: '#888780' },
+    { label: 'Radar',     value: `${ship.radarStrength.toFixed(2)}x`, pct: ship.radarStrength / 1.6, col: '#6B7FD7' },
+    { label: 'Firma',     value: `${ship.signatureProfile.toFixed(2)}x`, pct: ship.signatureProfile / 2.5, col: '#B55E7A' },
   ]
 
   return (

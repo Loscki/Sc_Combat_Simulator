@@ -7,7 +7,12 @@
  * ─── MODELO ───────────────────────────────────────────────────
  * Tick rate : 0.1 segundos (TICK_RATE)
  * Fórmula daño/tick:
- *   dmg = ship.dps × TICK_RATE × accEfectiva × (1 - evaEfectiva_enemigo)
+ *   dmg = ship.dps × TICK_RATE si el disparo impacta
+ *
+ * Tracking / time-on-target:
+ *   - Estar en rango no garantiza disparar cada tick
+ *   - Cada piloto necesita una solución de tracking mínima
+ *   - Pilotos expertos esperan mejor solución y la sostienen con menos jitter
  *
  * Habilidad del piloto (0–10, default 5):
  *   accEfectiva = clamp01(ship.accuracy + (pilotSkill - 5) × PILOT_SKILL_STEP)
@@ -50,9 +55,15 @@ export const DMG_VARIANCE_CAP = 0.28        // límite absoluto de varianza (±)
 /** Modelo de distancia (range) simplificado */
 export const RANGE_OPT_MIN_M = 600   // skill 10 → 600m
 export const RANGE_OPT_MAX_M = 1000  // skill 0  → 1000m
+export const FIRE_RANGE_MIN_M = 1000 // skill 10 → no suele abrir fuego por encima de 1km
+export const FIRE_RANGE_MAX_M = 1400 // skill 0  → dispara antes, aunque con peor calidad
 export const RANGE_INITIAL_M = 1500
 export const RANGE_MIN_M     = 300
 export const RANGE_CLOSING_MPS = 120
+export const APPROACH_RANGE_M = 5000
+export const APPROACH_SPEED_MIN_MPS = 250
+export const APPROACH_SPEED_MAX_MPS = 850
+export const APPROACH_BOOST_FACTOR = 0.45
 export const RANGE_ACC_PENALTY_K = 0.9
 export const RANGE_ACC_FLOOR = 0.10
 export const MERGE_RANGE_M = 600
@@ -62,8 +73,16 @@ export const ENGAGE_PULL_K = 0.9         // fuerza hacia rango objetivo tras el 
 export const ENGAGE_JITTER_MPS = 45      // variación (m/s) del rango (post-merge)
 export const ENGAGE_CONTROL_MPS = 55     // control por diferencia de skill (m/s)
 
+/** Modelo de tracking / time-on-target */
+export const TRACKING_JITTER_MIN = 0.04   // piloto excelente: solucion mas estable
+export const TRACKING_JITTER_MAX = 0.18   // piloto novato: solucion mas irregular
+export const TRACKING_TRIGGER_MIN = 0.30  // skill 0: dispara con soluciones pobres
+export const TRACKING_TRIGGER_MAX = 0.45  // skill 10: espera una solucion mas limpia
+export const TRACKING_MERGE_PENALTY = 0.08
+
 /** Modelo de detección (primer contacto / reacción) */
 export const DETECTION_RANGE_DEFAULT_M = 20000
+export const DETECTION_RANGE_MAX_M = 80000
 export const DETECTION_SKILL_SCALE = 0.20 // ±20% al rango base según skill
 export const REACTION_DELAY_MIN_SEC = 0.15
 export const REACTION_DELAY_MAX_SEC = 1.25
@@ -111,15 +130,18 @@ export function runSimulation({
   const vB = dmgVarianceForPilot(pilotSkillB)
   const rOptA = rangeOptForPilot(pilotSkillA)
   const rOptB = rangeOptForPilot(pilotSkillB)
+  const fireRangeA = fireRangeForPilot(pilotSkillA, rOptA)
+  const fireRangeB = fireRangeForPilot(pilotSkillB, rOptB)
 
   const initialRangeMUsed = Math.max(minRangeM, Number(initialRangeM) || RANGE_INITIAL_M)
   let rangeM = initialRangeMUsed
   let mergeAtSec = null
   let mergeCount = 0
-  const engageTargetM = Math.max(minRangeM, Math.min(initialRangeMUsed, Math.round((rOptA + rOptB) / 2)))
 
-  const detectA = detectionRangeForPilot(shipA, shipB, detectionRangeM, pilotSkillA)
-  const detectB = detectionRangeForPilot(shipB, shipA, detectionRangeM, pilotSkillB)
+  const detectionA = detectionForPilot(shipA, shipB, detectionRangeM, pilotSkillA)
+  const detectionB = detectionForPilot(shipB, shipA, detectionRangeM, pilotSkillB)
+  const detectA = detectionA.rangeM
+  const detectB = detectionB.rangeM
   let detectedA = false
   let detectedB = false
   let readyAtA = Infinity
@@ -167,6 +189,8 @@ export function runSimulation({
   const shots = []
   let secShotsA = 0, secHitsA = 0, secDmgA = 0
   let secShotsB = 0, secHitsB = 0, secDmgB = 0
+  let totalShotsA = 0, totalHitsA = 0
+  let totalShotsB = 0, totalHitsB = 0
 
   // Flags de eventos únicos
   const fired = {
@@ -197,15 +221,18 @@ export function runSimulation({
     const prevRangeM = rangeM
     // Range: antes del primer merge cierran; después oscila (puede abrirse y re-mergear)
     if (mergeCount === 0) {
-      rangeM = Math.max(minRangeM, rangeM - Math.max(0, Number(closingSpeedMps) || 0) * TICK_RATE)
+      const closeMps = closingSpeedForRange(rangeM, shipA, shipB, closingSpeedMps)
+      rangeM = Math.max(minRangeM, rangeM - closeMps * TICK_RATE)
     } else {
       const effA = clampPilotSkill(pilotSkillA) * engageAwarenessFactor(detectedA, secNow >= readyAtA)
       const effB = clampPilotSkill(pilotSkillB) * engageAwarenessFactor(detectedB, secNow >= readyAtB)
-      const control = (effA - effB) / 10 // aprox [-1,1]
+      const engageTargetM = engagementTargetRange(rOptA, rOptB, effA, effB, minRangeM, initialRangeMUsed)
+      const controlGap = Math.abs(effA - effB) / 10
       const pull = (engageTargetM - rangeM) * ENGAGE_PULL_K
       const jitter = randUniform(rng, -ENGAGE_JITTER_MPS, ENGAGE_JITTER_MPS)
-      const controlTerm = (-control) * ENGAGE_CONTROL_MPS
-      const vel = clamp(pull + jitter + controlTerm, -Number(closingSpeedMps) || -RANGE_CLOSING_MPS, 200)
+      const maxClosing = (Math.max(0, Number(closingSpeedMps) || RANGE_CLOSING_MPS)) + ENGAGE_CONTROL_MPS * controlGap
+      const maxOpening = 200 + ENGAGE_CONTROL_MPS * controlGap
+      const vel = clamp(pull + jitter, -maxClosing, maxOpening)
       rangeM = clamp(rangeM + vel * TICK_RATE, minRangeM, initialRangeMUsed)
     }
 
@@ -223,28 +250,32 @@ export function runSimulation({
     const rangeFactorA = rangeAccuracyFactor(rangeM, rOptA)
     const rangeFactorB = rangeAccuracyFactor(rangeM, rOptB)
 
-    const canFireA = detectedA && secNow >= readyAtA && rangeM <= rOptA
-    const canFireB = detectedB && secNow >= readyAtB && rangeM <= rOptB
+    const inFireEnvelopeA = detectedA && secNow >= readyAtA && rangeM <= fireRangeA
+    const inFireEnvelopeB = detectedB && secNow >= readyAtB && rangeM <= fireRangeB
+    const trackingA = inFireEnvelopeA ? trackingQuality(shipA, shipB, pilotSkillA, rangeFactorA, inMergeWindow, rng) : 0
+    const trackingB = inFireEnvelopeB ? trackingQuality(shipB, shipA, pilotSkillB, rangeFactorB, inMergeWindow, rng) : 0
+    const canFireA = inFireEnvelopeA && trackingA >= triggerThresholdForPilot(pilotSkillA)
+    const canFireB = inFireEnvelopeB && trackingB >= triggerThresholdForPilot(pilotSkillB)
 
     if (canFireA && !fired.aFirstShots) {
       fired.aFirstShots = true
-      events.push({ t: secNow, text: `${shipA.name} abre fuego (~${Math.round(rOptA)}m)`, side: 'a' })
+      events.push({ t: secNow, text: `${shipA.name} abre fuego (${Math.round(rangeM)}m · óptimo ~${Math.round(rOptA)}m)`, side: 'a' })
     }
     if (canFireB && !fired.bFirstShots) {
       fired.bFirstShots = true
-      events.push({ t: secNow, text: `${shipB.name} abre fuego (~${Math.round(rOptB)}m)`, side: 'b' })
+      events.push({ t: secNow, text: `${shipB.name} abre fuego (${Math.round(rangeM)}m · óptimo ~${Math.round(rOptB)}m)`, side: 'b' })
     }
 
-    const hitChanceA = canFireA ? clamp01((accA * rangeFactorA) * (1 - evaB) + mergeBias) : 0
-    const hitChanceB = canFireB ? clamp01((accB * rangeFactorB) * (1 - evaA) - mergeBias) : 0
+    const hitChanceA = canFireA ? clamp01((accA * rangeFactorA) * (1 - evaB) * trackingHitFactor(trackingA) + mergeBias) : 0
+    const hitChanceB = canFireB ? clamp01((accB * rangeFactorB) * (1 - evaA) * trackingHitFactor(trackingB) - mergeBias) : 0
 
     const varA = varianceForShot(vA, rangeM, rOptA, inMergeWindow)
     const varB = varianceForShot(vB, rangeM, rOptB, inMergeWindow)
     const shotDmgA = canFireA ? applyVariance(shipA.dps * TICK_RATE, varA, rng) : 0
     const shotDmgB = canFireB ? applyVariance(shipB.dps * TICK_RATE, varB, rng) : 0
 
-    if (canFireA) secShotsA++
-    if (canFireB) secShotsB++
+    if (canFireA) { secShotsA++; totalShotsA++ }
+    if (canFireB) { secShotsB++; totalShotsB++ }
 
     const hitA = canFireA ? (rng() < hitChanceA) : false
     const hitB = canFireB ? (rng() < hitChanceB) : false
@@ -252,8 +283,8 @@ export function runSimulation({
     const dmgAonB = hitA ? shotDmgA : 0
     const dmgBonA = hitB ? shotDmgB : 0
 
-    if (hitA) { secHitsA++; secDmgA += dmgAonB }
-    if (hitB) { secHitsB++; secDmgB += dmgBonA }
+    if (hitA) { secHitsA++; totalHitsA++; secDmgA += dmgAonB }
+    if (hitB) { secHitsB++; totalHitsB++; secDmgB += dmgBonA }
 
     applyDamage(stateB, dmgAonB, shipB.shieldCooldown)
     applyDamage(stateA, dmgBonA, shipA.shieldCooldown)
@@ -342,8 +373,18 @@ export function runSimulation({
     mergeAtSec,
     mergeCount,
     detection: {
-      a: { rangeM: detectA, readyAtSec: Number.isFinite(readyAtA) ? parseFloat(readyAtA.toFixed(2)) : null },
-      b: { rangeM: detectB, readyAtSec: Number.isFinite(readyAtB) ? parseFloat(readyAtB.toFixed(2)) : null },
+      a: {
+        rangeM: detectA,
+        readyAtSec: Number.isFinite(readyAtA) ? parseFloat(readyAtA.toFixed(2)) : null,
+        radarStrength: detectionA.radarStrength,
+        targetSignature: detectionA.signatureScore,
+      },
+      b: {
+        rangeM: detectB,
+        readyAtSec: Number.isFinite(readyAtB) ? parseFloat(readyAtB.toFixed(2)) : null,
+        radarStrength: detectionB.radarStrength,
+        targetSignature: detectionB.signatureScore,
+      },
     },
     events,
     shots,
@@ -352,18 +393,28 @@ export function runSimulation({
       a: {
         hullRemaining:   Math.round(stateA.hull),
         shieldRemaining: Math.round(stateA.shield),
-        hullPct:         Math.round((stateA.hull / shipA.hullMax) * 100),
+        hullPct:         pctRemaining(stateA.hull, shipA.hullMax),
+        shieldPct:       pctRemaining(stateA.shield, shipA.shieldMax),
+        totalHpPct:      pctRemaining(stateA.hull + stateA.shield, shipA.hullMax + shipA.shieldMax),
         totalDmgDealt:   Math.round(totalDmgA),
         effectiveDps:    parseFloat(effDpsA.toFixed(1)),
         theoreticalDps:  shipA.dps,
+        shotsFired:      totalShotsA,
+        hits:            totalHitsA,
+        hitPct:          totalShotsA > 0 ? Math.round((totalHitsA / totalShotsA) * 100) : 0,
       },
       b: {
         hullRemaining:   Math.round(stateB.hull),
         shieldRemaining: Math.round(stateB.shield),
-        hullPct:         Math.round((stateB.hull / shipB.hullMax) * 100),
+        hullPct:         pctRemaining(stateB.hull, shipB.hullMax),
+        shieldPct:       pctRemaining(stateB.shield, shipB.shieldMax),
+        totalHpPct:      pctRemaining(stateB.hull + stateB.shield, shipB.hullMax + shipB.shieldMax),
         totalDmgDealt:   Math.round(totalDmgB),
         effectiveDps:    parseFloat(effDpsB.toFixed(1)),
         theoreticalDps:  shipB.dps,
+        shotsFired:      totalShotsB,
+        hits:            totalHitsB,
+        hitPct:          totalShotsB > 0 ? Math.round((totalHitsB / totalShotsB) * 100) : 0,
       },
     },
   }
@@ -429,6 +480,52 @@ function rangeOptForPilot(pilotSkill) {
   return RANGE_OPT_MIN_M + (RANGE_OPT_MAX_M - RANGE_OPT_MIN_M) * (1 - s)
 }
 
+function fireRangeForPilot(pilotSkill, rOptM) {
+  const s = clampPilotSkill(pilotSkill) / 10
+  const fireRange = FIRE_RANGE_MIN_M + (FIRE_RANGE_MAX_M - FIRE_RANGE_MIN_M) * (1 - s)
+  return Math.max(rOptM, fireRange)
+}
+
+function engagementTargetRange(rOptA, rOptB, controlA, controlB, minRangeM, maxRangeM) {
+  const wA = 1 + Math.max(0, Number(controlA) || 0)
+  const wB = 1 + Math.max(0, Number(controlB) || 0)
+  const target = (rOptA * wA + rOptB * wB) / (wA + wB)
+  return clamp(target, minRangeM, maxRangeM)
+}
+
+function closingSpeedForRange(rangeM, shipA, shipB, fallbackMps) {
+  const combatCloseMps = Math.max(0, Number(fallbackMps) || RANGE_CLOSING_MPS)
+  if (rangeM <= APPROACH_RANGE_M) return combatCloseMps
+
+  const boostA = Number(shipA?.speedBoost) || (Number(shipA?.speedSCM) || 0) * 4 || combatCloseMps
+  const boostB = Number(shipB?.speedBoost) || (Number(shipB?.speedSCM) || 0) * 4 || combatCloseMps
+  const approachMps = ((boostA + boostB) / 2) * APPROACH_BOOST_FACTOR
+  return clamp(approachMps, Math.max(combatCloseMps, APPROACH_SPEED_MIN_MPS), APPROACH_SPEED_MAX_MPS)
+}
+
+function trackingQuality(attackerShip, defenderShip, pilotSkill, rangeFactor, inMergeWindow, rand) {
+  const s = clampPilotSkill(pilotSkill) / 10
+  const handling = clamp01(0.45 + (attackerShip.accuracy ?? 0.6) * 0.30 + (attackerShip.evasion ?? 0.25) * 0.25)
+  const defensivePressure = clamp01(0.18 + (defenderShip.evasion ?? 0.25) * 0.55)
+  const jitter = randUniform(rand, -trackingJitterForPilot(pilotSkill), trackingJitterForPilot(pilotSkill))
+  const mergePenalty = inMergeWindow ? TRACKING_MERGE_PENALTY * (1 - s) : 0
+  return clamp01(0.18 + s * 0.34 + handling * 0.26 + rangeFactor * 0.30 - defensivePressure - mergePenalty + jitter)
+}
+
+function trackingJitterForPilot(pilotSkill) {
+  const s = clampPilotSkill(pilotSkill) / 10
+  return TRACKING_JITTER_MIN + (TRACKING_JITTER_MAX - TRACKING_JITTER_MIN) * (1 - s)
+}
+
+function triggerThresholdForPilot(pilotSkill) {
+  const s = clampPilotSkill(pilotSkill) / 10
+  return TRACKING_TRIGGER_MIN + (TRACKING_TRIGGER_MAX - TRACKING_TRIGGER_MIN) * s
+}
+
+function trackingHitFactor(tracking) {
+  return clamp(0.70 + tracking * 0.55, 0.70, 1.25)
+}
+
 function rangeAccuracyFactor(rangeM, rOptM) {
   const over = Math.max(0, rangeM - rOptM)
   if (over <= 0) return 1
@@ -447,18 +544,39 @@ function clamp(x, min, max) {
   return Math.min(max, Math.max(min, x))
 }
 
-function detectionRangeForPilot(attackerShip, targetShip, baseDetectionRangeM, pilotSkill) {
+function pctRemaining(value, max) {
+  const maxValue = Number(max)
+  if (!Number.isFinite(maxValue) || maxValue <= 0) return 0
+  return Math.round((Math.max(0, Number(value) || 0) / maxValue) * 100)
+}
+
+function detectionForPilot(attackerShip, targetShip, baseDetectionRangeM, pilotSkill) {
   const base = Number(baseDetectionRangeM) || DETECTION_RANGE_DEFAULT_M
   const s = clampPilotSkill(pilotSkill) / 10
   const skillMult = (1 - DETECTION_SKILL_SCALE) + (2 * DETECTION_SKILL_SCALE) * s // [1-scale, 1+scale]
 
-  const radar = Number(attackerShip?.radarStrength) || 1
-  const sigEM = Number(targetShip?.sigEM) || 1
-  const sigIR = Number(targetShip?.sigIR) || 1
-  const sigCS = Number(targetShip?.sigCS) || 1
-  const signatureScore = Math.max(0.25, 0.45 * sigEM + 0.35 * sigIR + 0.20 * sigCS)
+  const radarStrength = Math.max(0.25, Number(attackerShip?.radarStrength) || 1)
+  const signatureScore = weightedTargetSignature(targetShip)
+  const rangeM = clamp(
+    base * radarStrength * skillMult * Math.sqrt(signatureScore),
+    200,
+    DETECTION_RANGE_MAX_M
+  )
 
-  return Math.max(200, (base * radar * skillMult) / signatureScore)
+  return {
+    rangeM,
+    radarStrength: parseFloat(radarStrength.toFixed(2)),
+    signatureScore: parseFloat(signatureScore.toFixed(2)),
+  }
+}
+
+function weightedTargetSignature(ship) {
+  const sigEM = Math.max(0.1, Number(ship?.sigEM) || 1)
+  const sigIR = Math.max(0.1, Number(ship?.sigIR) || 1)
+  const sigCS = Math.max(0.1, Number(ship?.sigCS) || 1)
+  const profile = Number(ship?.signatureProfile)
+  if (Number.isFinite(profile) && profile > 0) return profile
+  return Math.max(0.25, 0.42 * sigEM + 0.33 * sigIR + 0.25 * sigCS)
 }
 
 function reactionDelaySec(pilotSkill) {

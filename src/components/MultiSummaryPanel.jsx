@@ -36,9 +36,9 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
           sub={`${(summary.avgDuration / 60).toFixed(1)} min`}
         />
         <SummaryMetric
-          label="HP medio restante"
+          label="Casco medio restante"
           value={`${Math.round(summary.avgHullPctA)}% / ${Math.round(summary.avgHullPctB)}%`}
-          sub={`${shipAName} / ${shipBName}`}
+          sub={`Hasta destrucción · HP+escudo: ${Math.round(summary.avgTotalHpPctA)}% / ${Math.round(summary.avgTotalHpPctB)}%`}
         />
       </div>
 
@@ -69,4 +69,3 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
     </div>
   )
 }
-
