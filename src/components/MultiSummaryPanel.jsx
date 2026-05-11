@@ -13,6 +13,34 @@ function SummaryMetric({ label, value, sub }) {
   )
 }
 
+function SummaryShipRow({ label, value, sub }) {
+  return (
+    <div className="ship-metric-row">
+      <div>
+        <div className="ship-metric-label">{label}</div>
+        {sub && <div className="ship-metric-sub">{sub}</div>}
+      </div>
+      <div className="ship-metric-value">{value}</div>
+    </div>
+  )
+}
+
+function SummaryShipColumn({ side, shipName, children }) {
+  const isA = side === 'a'
+  return (
+    <div className={`ship-metric-column ship-metric-${side}`}>
+      <div className="ship-metric-header">
+        <div>
+          <div className="ship-metric-title">{shipName}</div>
+          <div className="ship-metric-meta">{isA ? 'Alfa' : 'Beta'}</div>
+        </div>
+        <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{isA ? 'Alfa' : 'Beta'}</span>
+      </div>
+      <div className="ship-metric-list">{children}</div>
+    </div>
+  )
+}
+
 export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
   if (!summary) return null
 
@@ -22,11 +50,6 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
 
       <div className="metrics-grid">
         <SummaryMetric
-          label="Victorias"
-          value={`${summary.winsA} / ${summary.winsB}`}
-          sub={`${shipAName} / ${shipBName}`}
-        />
-        <SummaryMetric
           label="Empates"
           value={summary.draws}
         />
@@ -34,26 +57,6 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
           label="Duración media"
           value={`${Math.round(summary.avgDuration)}s`}
           sub={`${(summary.avgDuration / 60).toFixed(1)} min`}
-        />
-        <SummaryMetric
-          label="Casco medio restante"
-          value={`${Math.round(summary.avgHullPctA)}% / ${Math.round(summary.avgHullPctB)}%`}
-          sub={`Hasta destrucción · HP+escudo: ${Math.round(summary.avgTotalHpPctA)}% / ${Math.round(summary.avgTotalHpPctB)}%`}
-        />
-      </div>
-
-      <div className="metrics-grid">
-        <SummaryMetric
-          label={`DPS efectivo medio ${shipAName}`}
-          value={summary.avgEffDpsA.toFixed(1)}
-        />
-        <SummaryMetric
-          label={`DPS efectivo medio ${shipBName}`}
-          value={summary.avgEffDpsB.toFixed(1)}
-        />
-        <SummaryMetric
-          label="Total simulaciones"
-          value={summary.total}
         />
         <SummaryMetric
           label="Balance"
@@ -65,6 +68,56 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
                 : 'Ventaja Beta'
           }
         />
+        <SummaryMetric
+          label="Total simulaciones"
+          value={summary.total}
+        />
+      </div>
+
+      <div className="ship-metrics-grid">
+        <SummaryShipColumn side="a" shipName={shipAName}>
+          <SummaryShipRow
+            label="Victorias"
+            value={summary.winsA}
+            sub={`${Math.round((summary.winsA / summary.total) * 100)}% del total`}
+          />
+          <SummaryShipRow
+            label="Casco medio restante"
+            value={`${Math.round(summary.avgHullPctA)}%`}
+            sub={`Hasta destrucción · HP+escudo: ${Math.round(summary.avgTotalHpPctA)}%`}
+          />
+          <SummaryShipRow
+            label="DPS efectivo medio"
+            value={summary.avgEffDpsA.toFixed(1)}
+          />
+          <SummaryShipRow
+            label="Ventana de fuego media"
+            value={`${Math.round(summary.avgFireUptimeA)}%`}
+            sub={`Capacitor medio: ${Math.round(summary.avgWeaponCapA)}%`}
+          />
+        </SummaryShipColumn>
+
+        <SummaryShipColumn side="b" shipName={shipBName}>
+          <SummaryShipRow
+            label="Victorias"
+            value={summary.winsB}
+            sub={`${Math.round((summary.winsB / summary.total) * 100)}% del total`}
+          />
+          <SummaryShipRow
+            label="Casco medio restante"
+            value={`${Math.round(summary.avgHullPctB)}%`}
+            sub={`Hasta destrucción · HP+escudo: ${Math.round(summary.avgTotalHpPctB)}%`}
+          />
+          <SummaryShipRow
+            label="DPS efectivo medio"
+            value={summary.avgEffDpsB.toFixed(1)}
+          />
+          <SummaryShipRow
+            label="Ventana de fuego media"
+            value={`${Math.round(summary.avgFireUptimeB)}%`}
+            sub={`Capacitor medio: ${Math.round(summary.avgWeaponCapB)}%`}
+          />
+        </SummaryShipColumn>
       </div>
     </div>
   )

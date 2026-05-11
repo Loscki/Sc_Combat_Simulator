@@ -131,6 +131,10 @@ function buildSummary(runs) {
   const avgTotalHpPctB = avg(runs.map(r => r.stats.b.totalHpPct ?? totalHpPctForRun(r, 'b')))
   const avgEffDpsA = avg(runs.map(r => r.stats.a.effectiveDps))
   const avgEffDpsB = avg(runs.map(r => r.stats.b.effectiveDps))
+  const avgFireUptimeA = avg(runs.map(r => r.stats.a.fireUptimePct ?? 0))
+  const avgFireUptimeB = avg(runs.map(r => r.stats.b.fireUptimePct ?? 0))
+  const avgWeaponCapA = avg(runs.map(r => r.stats.a.avgWeaponCapPct ?? 100))
+  const avgWeaponCapB = avg(runs.map(r => r.stats.b.avgWeaponCapPct ?? 100))
 
   return {
     total,
@@ -144,6 +148,10 @@ function buildSummary(runs) {
     avgTotalHpPctB,
     avgEffDpsA,
     avgEffDpsB,
+    avgFireUptimeA,
+    avgFireUptimeB,
+    avgWeaponCapA,
+    avgWeaponCapB,
   }
 }
 

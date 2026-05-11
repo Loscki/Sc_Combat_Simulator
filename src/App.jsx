@@ -15,6 +15,33 @@ import { SimRunsSidebar } from './components/SimRunsSidebar'
 import { MultiSummaryPanel } from './components/MultiSummaryPanel'
 import { ShotLog } from './components/ShotLog'
 
+const RUN_WINNER_LABEL = {
+  a: 'Gana Alfa',
+  b: 'Gana Beta',
+  draw: 'Empate',
+}
+
+function SelectedRunHeader({ result }) {
+  const index = result.index ?? 1
+  const km = ((Number(result.initialRangeM ?? result.initialRangeMUsed) || 0) / 1000).toFixed(1)
+  const winner = RUN_WINNER_LABEL[result.winner] ?? 'Resultado'
+
+  return (
+    <div className="selected-run-header" aria-label="Simulación seleccionada">
+      <div className="selected-run-title-block">
+        <div className="section-label">Simulación seleccionada</div>
+        <h2>Simulación #{index}</h2>
+        <p>{result.shipA.name} vs {result.shipB.name}</p>
+      </div>
+      <div className="selected-run-meta">
+        <span>{winner}</span>
+        <span>{Math.round(result.durationSec)}s</span>
+        <span>{km} km iniciales</span>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const {
     config, updateConfig,
@@ -27,7 +54,7 @@ export default function App() {
   } = useSimulator()
 
   return (
-    <div className="app">
+    <div className={`app ${isMulti ? 'has-run-history' : ''}`}>
       <header className="app-header">
         <h1>SC Combat Simulator</h1>
         <span className="app-version">v0.1 · mock data · Gladius vs Arrow</span>
@@ -79,6 +106,8 @@ export default function App() {
                   shipBName={result.shipB.name}
                 />
               )}
+
+              {isMulti && <SelectedRunHeader result={result} />}
 
               <ResultsPanel result={result} onReset={reset} />
               <div className="charts-and-log">

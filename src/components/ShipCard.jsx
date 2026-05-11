@@ -8,6 +8,13 @@ export function ShipCard({ ship, shipId, ships, side, onSelectShip }) {
   const isA    = side === 'a'
   const color  = isA ? '#378ADD' : '#D85A30'
   const shield = isA ? '#1D9E75' : '#EF9F27'
+  const weaponBank = ship.weaponBank ?? {}
+  const weaponCap = Number(weaponBank.capacity) || 0
+  const weaponDrain = Number(weaponBank.drainPerSec) || 0
+  const weaponRegen = Number(weaponBank.regenPerSec) || 0
+  const weaponSource = weaponBank.dataSource ?? 'mock'
+  const rawWeaponDps = Number(weaponBank.totalBurstDps) || 0
+  const ammoCapacity = Number(weaponBank.ammoCapacity) || 0
 
   const shipList = Object.values(ships).sort((s1, s2) => {
     const m = s1.manufacturer.localeCompare(s2.manufacturer)
@@ -26,6 +33,10 @@ export function ShipCard({ ship, shipId, ships, side, onSelectShip }) {
     { label: 'Casco',     value: ship.hullMax,    max: 1200,  pct: ship.hullMax / 1200,    col: color  },
     { label: 'Escudos',   value: ship.shieldMax,  max: 1300,  pct: ship.shieldMax / 1300,  col: shield },
     { label: 'Regen/s',   value: ship.shieldRegen,max: 100,   pct: ship.shieldRegen / 100, col: shield },
+    { label: 'Cap. armas', value: weaponCap,       max: 190,   pct: weaponCap / 190,        col: '#7D6B2D' },
+    { label: 'Consumo/s', value: weaponDrain.toFixed(1), max: 62, pct: weaponDrain / 62,    col: '#BA7517' },
+    { label: 'Recarga/s', value: weaponRegen.toFixed(1), max: 36, pct: weaponRegen / 36,    col: '#1D9E75' },
+    { label: 'Munición',  value: ammoCapacity > 0 ? ammoCapacity : '∞', max: 6000, pct: ammoCapacity > 0 ? ammoCapacity / 6000 : 1, col: '#8B6F3D' },
     { label: 'Precisión', value: `${Math.round(ship.accuracy * 100)}%`, pct: ship.accuracy, col: '#BA7517' },
     { label: 'Evasión',   value: `${Math.round(ship.evasion * 100)}%`,  pct: ship.evasion,  col: '#888780' },
     { label: 'Radar',     value: `${ship.radarStrength.toFixed(2)}x`, pct: ship.radarStrength / 1.6, col: '#6B7FD7' },
@@ -65,7 +76,10 @@ export function ShipCard({ ship, shipId, ships, side, onSelectShip }) {
 
       {/* DPS destacado */}
       <div className="dps-badge" style={{ color }}>
-        DPS {ship.dps}
+        DPS sim {ship.dps}
+      </div>
+      <div className={`data-source data-source-${weaponSource}`}>
+        Armas: {sourceLabel(weaponSource)}{rawWeaponDps > 0 ? ` · raw ${rawWeaponDps}` : ''}
       </div>
 
       {/* Barras de stats */}
@@ -82,4 +96,10 @@ export function ShipCard({ ship, shipId, ships, side, onSelectShip }) {
       </div>
     </div>
   )
+}
+
+function sourceLabel(source) {
+  if (source === 'real') return 'datos reales'
+  if (source === 'mixed') return 'real + fallback'
+  return 'fallback mock'
 }

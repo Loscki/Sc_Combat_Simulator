@@ -6,13 +6,19 @@
  *
  * ─── MODELO ───────────────────────────────────────────────────
  * Tick rate : 0.1 segundos (TICK_RATE)
- * Fórmula daño/tick:
- *   dmg = ship.dps × TICK_RATE si el disparo impacta
+ * Daño:
+ *   Cada grupo de armas dispara por RPM, alpha calibrado y tipo de daño.
  *
  * Tracking / time-on-target:
  *   - Estar en rango no garantiza disparar cada tick
  *   - Cada piloto necesita una solución de tracking mínima
  *   - Pilotos expertos esperan mejor solución y la sostienen con menos jitter
+ *
+ * Capacitor de armas:
+ *   - La capacidad/recarga/consumo vienen del banco de armas equipado
+ *   - Disparar consume capacitor; sin capacitor suficiente se corta la ráfaga
+ *   - El capacitor regenera cuando la nave no dispara
+ *   - Tras vaciarse, la nave espera una reserva mínima antes de reabrir fuego
  *
  * Habilidad del piloto (0–10, default 5):
  *   accEfectiva = clamp01(ship.accuracy + (pilotSkill - 5) × PILOT_SKILL_STEP)
@@ -80,6 +86,27 @@ export const TRACKING_TRIGGER_MIN = 0.30  // skill 0: dispara con soluciones pob
 export const TRACKING_TRIGGER_MAX = 0.45  // skill 10: espera una solucion mas limpia
 export const TRACKING_MERGE_PENALTY = 0.08
 
+/** Modelo de capacitor / ventanas de fuego */
+export const WEAPON_CAP_MIN = 75
+export const WEAPON_CAP_MAX = 190
+export const WEAPON_CAP_REGEN_MIN = 12
+export const WEAPON_CAP_REGEN_MAX = 36
+export const WEAPON_CAP_DRAIN_MIN = 22
+export const WEAPON_CAP_DRAIN_MAX = 62
+export const WEAPON_CAP_RESUME_MIN = 0.18
+export const WEAPON_CAP_RESUME_MAX = 0.34
+export const WEAPON_CAP_SKILL_EFFICIENCY = 0.012
+
+/** Modelo de daño por tipo, escudos y armor */
+export const SHIELD_ENERGY_MULT = 1.00
+export const SHIELD_PHYSICAL_MULT = 0.55
+export const SHIELD_DISTORTION_MULT = 1.20
+export const PHYSICAL_SHIELD_BLEED_MIN = 0.08
+export const PHYSICAL_SHIELD_BLEED_MAX = 0.38
+export const ARMOR_REDUCTION_MIN = 0.04
+export const ARMOR_REDUCTION_MAX = 0.28
+export const ARMOR_PENETRATION_SCALE = 0.055
+
 /** Modelo de detección (primer contacto / reacción) */
 export const DETECTION_RANGE_DEFAULT_M = 20000
 export const DETECTION_RANGE_MAX_M = 80000
@@ -132,6 +159,8 @@ export function runSimulation({
   const rOptB = rangeOptForPilot(pilotSkillB)
   const fireRangeA = fireRangeForPilot(pilotSkillA, rOptA)
   const fireRangeB = fireRangeForPilot(pilotSkillB, rOptB)
+  const weaponCapProfileA = weaponCapProfile(shipA, pilotSkillA)
+  const weaponCapProfileB = weaponCapProfile(shipB, pilotSkillB)
 
   const initialRangeMUsed = Math.max(minRangeM, Number(initialRangeM) || RANGE_INITIAL_M)
   let rangeM = initialRangeMUsed
@@ -152,16 +181,30 @@ export function runSimulation({
     hull:        shipA.hullMax,
     shield:      shipA.shieldMax,
     shieldTimer: 0,   // ticks restantes de cooldown
+    weaponCap:   weaponCapProfileA.capacity,
+    capHold:     false,
+    weaponCharge: initialWeaponCharge(weaponCapProfileA),
+    weaponAmmo:   initialWeaponAmmo(weaponCapProfileA),
   }
   const stateB = {
     hull:        shipB.hullMax,
     shield:      shipB.shieldMax,
     shieldTimer: 0,
+    weaponCap:   weaponCapProfileB.capacity,
+    capHold:     false,
+    weaponCharge: initialWeaponCharge(weaponCapProfileB),
+    weaponAmmo:   initialWeaponAmmo(weaponCapProfileB),
   }
 
   // Acumuladores
   let totalDmgA = 0   // daño total infligido por A sobre B
   let totalDmgB = 0   // daño total infligido por B sobre A
+  const totalDmgTypesA = {}
+  const totalDmgTypesB = {}
+  let totalShieldDmgA = 0, totalHullDmgA = 0
+  let totalShieldDmgB = 0, totalHullDmgB = 0
+  let ammoSpentA = 0, ammoSpentB = 0
+  let ammoDryTicksA = 0, ammoDryTicksB = 0
 
   // Snapshots para gráficas (1 punto por segundo)
   const series = {
@@ -191,6 +234,10 @@ export function runSimulation({
   let secShotsB = 0, secHitsB = 0, secDmgB = 0
   let totalShotsA = 0, totalHitsA = 0
   let totalShotsB = 0, totalHitsB = 0
+  let fireTicksA = 0, fireTicksB = 0
+  let capStarvedTicksA = 0, capStarvedTicksB = 0
+  let capSumA = 0, capSumB = 0
+  let capSamples = 0
 
   // Flags de eventos únicos
   const fired = {
@@ -254,40 +301,53 @@ export function runSimulation({
     const inFireEnvelopeB = detectedB && secNow >= readyAtB && rangeM <= fireRangeB
     const trackingA = inFireEnvelopeA ? trackingQuality(shipA, shipB, pilotSkillA, rangeFactorA, inMergeWindow, rng) : 0
     const trackingB = inFireEnvelopeB ? trackingQuality(shipB, shipA, pilotSkillB, rangeFactorB, inMergeWindow, rng) : 0
-    const canFireA = inFireEnvelopeA && trackingA >= triggerThresholdForPilot(pilotSkillA)
-    const canFireB = inFireEnvelopeB && trackingB >= triggerThresholdForPilot(pilotSkillB)
+    const wantsFireA = inFireEnvelopeA && trackingA >= triggerThresholdForPilot(pilotSkillA)
+    const wantsFireB = inFireEnvelopeB && trackingB >= triggerThresholdForPilot(pilotSkillB)
 
-    if (canFireA && !fired.aFirstShots) {
+    const hitChanceA = wantsFireA ? clamp01((accA * rangeFactorA) * (1 - evaB) * trackingHitFactor(trackingA) + mergeBias) : 0
+    const hitChanceB = wantsFireB ? clamp01((accB * rangeFactorB) * (1 - evaA) * trackingHitFactor(trackingB) - mergeBias) : 0
+
+    const varA = varianceForShot(vA, rangeM, rOptA, inMergeWindow)
+    const varB = varianceForShot(vB, rangeM, rOptB, inMergeWindow)
+    const fireA = resolveWeaponFire(stateA, weaponCapProfileA, wantsFireA, hitChanceA, varA, rng)
+    const fireB = resolveWeaponFire(stateB, weaponCapProfileB, wantsFireB, hitChanceB, varB, rng)
+    if (fireA.capStarved) capStarvedTicksA++
+    if (fireB.capStarved) capStarvedTicksB++
+    if (fireA.ammoDry) ammoDryTicksA++
+    if (fireB.ammoDry) ammoDryTicksB++
+
+    if (fireA.shots > 0 && !fired.aFirstShots) {
       fired.aFirstShots = true
       events.push({ t: secNow, text: `${shipA.name} abre fuego (${Math.round(rangeM)}m · óptimo ~${Math.round(rOptA)}m)`, side: 'a' })
     }
-    if (canFireB && !fired.bFirstShots) {
+    if (fireB.shots > 0 && !fired.bFirstShots) {
       fired.bFirstShots = true
       events.push({ t: secNow, text: `${shipB.name} abre fuego (${Math.round(rangeM)}m · óptimo ~${Math.round(rOptB)}m)`, side: 'b' })
     }
 
-    const hitChanceA = canFireA ? clamp01((accA * rangeFactorA) * (1 - evaB) * trackingHitFactor(trackingA) + mergeBias) : 0
-    const hitChanceB = canFireB ? clamp01((accB * rangeFactorB) * (1 - evaA) * trackingHitFactor(trackingB) - mergeBias) : 0
+    if (fireA.shots > 0) { secShotsA += fireA.shots; totalShotsA += fireA.shots; fireTicksA++ }
+    if (fireB.shots > 0) { secShotsB += fireB.shots; totalShotsB += fireB.shots; fireTicksB++ }
 
-    const varA = varianceForShot(vA, rangeM, rOptA, inMergeWindow)
-    const varB = varianceForShot(vB, rangeM, rOptB, inMergeWindow)
-    const shotDmgA = canFireA ? applyVariance(shipA.dps * TICK_RATE, varA, rng) : 0
-    const shotDmgB = canFireB ? applyVariance(shipB.dps * TICK_RATE, varB, rng) : 0
+    const appliedA = applyDamage(stateB, fireA.impacts, shipB)
+    const appliedB = applyDamage(stateA, fireB.impacts, shipA)
+    const dmgAonB = appliedA.total
+    const dmgBonA = appliedB.total
 
-    if (canFireA) { secShotsA++; totalShotsA++ }
-    if (canFireB) { secShotsB++; totalShotsB++ }
+    secHitsA += fireA.hits
+    totalHitsA += fireA.hits
+    secDmgA += dmgAonB
+    addDamageBuckets(totalDmgTypesA, appliedA.byType)
+    totalShieldDmgA += appliedA.shieldDamage
+    totalHullDmgA += appliedA.hullDamage
+    ammoSpentA += fireA.ammoSpent
 
-    const hitA = canFireA ? (rng() < hitChanceA) : false
-    const hitB = canFireB ? (rng() < hitChanceB) : false
-
-    const dmgAonB = hitA ? shotDmgA : 0
-    const dmgBonA = hitB ? shotDmgB : 0
-
-    if (hitA) { secHitsA++; totalHitsA++; secDmgA += dmgAonB }
-    if (hitB) { secHitsB++; totalHitsB++; secDmgB += dmgBonA }
-
-    applyDamage(stateB, dmgAonB, shipB.shieldCooldown)
-    applyDamage(stateA, dmgBonA, shipA.shieldCooldown)
+    secHitsB += fireB.hits
+    totalHitsB += fireB.hits
+    secDmgB += dmgBonA
+    addDamageBuckets(totalDmgTypesB, appliedB.byType)
+    totalShieldDmgB += appliedB.shieldDamage
+    totalHullDmgB += appliedB.hullDamage
+    ammoSpentB += fireB.ammoSpent
 
     // Regeneración de escudos
     regenShield(stateA, shipA)
@@ -295,6 +355,9 @@ export function runSimulation({
 
     totalDmgA += dmgAonB
     totalDmgB += dmgBonA
+    capSumA += stateA.weaponCap / weaponCapProfileA.capacity
+    capSumB += stateB.weaponCap / weaponCapProfileB.capacity
+    capSamples++
 
     // Detección de eventos
     if (!fired.bShieldDown && stateB.shield <= 0) {
@@ -364,6 +427,12 @@ export function runSimulation({
   const durationSec = parseFloat((finishTick * TICK_RATE).toFixed(1))
   const effDpsA     = durationSec > 0 ? totalDmgA / durationSec : 0
   const effDpsB     = durationSec > 0 ? totalDmgB / durationSec : 0
+  const avgCapPctA  = capSamples > 0 ? Math.round((capSumA / capSamples) * 100) : 100
+  const avgCapPctB  = capSamples > 0 ? Math.round((capSumB / capSamples) * 100) : 100
+  const ammoCapacityA = ammoCapacityForProfile(weaponCapProfileA)
+  const ammoCapacityB = ammoCapacityForProfile(weaponCapProfileB)
+  const ammoRemainingA = ammoRemainingForState(stateA, weaponCapProfileA)
+  const ammoRemainingB = ammoRemainingForState(stateB, weaponCapProfileB)
 
   return {
     winner,                           // 'a' | 'b' | 'draw'
@@ -399,9 +468,31 @@ export function runSimulation({
         totalDmgDealt:   Math.round(totalDmgA),
         effectiveDps:    parseFloat(effDpsA.toFixed(1)),
         theoreticalDps:  shipA.dps,
+        rawWeaponDps:    Math.round(Number(shipA.weaponBank?.totalBurstDps) || shipA.dps || 0),
+        legacyDps:       Math.round(Number(shipA.legacyDps) || shipA.dps || 0),
+        dpsSource:       shipA.dpsSource ?? shipA.weaponBank?.dataSource ?? 'mock',
+        damageByType:    roundedDamageBuckets(totalDmgTypesA),
+        shieldDmgDealt:  Math.round(totalShieldDmgA),
+        hullDmgDealt:    Math.round(totalHullDmgA),
+        weaponGroups:    weaponCapProfileA.weaponGroups,
         shotsFired:      totalShotsA,
         hits:            totalHitsA,
         hitPct:          totalShotsA > 0 ? Math.round((totalHitsA / totalShotsA) * 100) : 0,
+        fireTimeSec:     parseFloat((fireTicksA * TICK_RATE).toFixed(1)),
+        fireUptimePct:   durationSec > 0 ? Math.round(((fireTicksA * TICK_RATE) / durationSec) * 100) : 0,
+        weaponCapPct:    Math.round((stateA.weaponCap / weaponCapProfileA.capacity) * 100),
+        avgWeaponCapPct: avgCapPctA,
+        capStarvedPct:   durationSec > 0 ? Math.round(((capStarvedTicksA * TICK_RATE) / durationSec) * 100) : 0,
+        weaponCapCapacity: Math.round(weaponCapProfileA.capacity),
+        weaponCapRegen:  parseFloat(weaponCapProfileA.regenPerSec.toFixed(1)),
+        weaponCapDrain:  parseFloat(weaponCapProfileA.drainPerSec.toFixed(1)),
+        weaponCount:     weaponCapProfileA.weaponCount,
+        weaponDataSource: weaponCapProfileA.dataSource,
+        ammoCapacity:    ammoCapacityA,
+        ammoRemaining:   ammoRemainingA,
+        ammoSpent:       ammoSpentA,
+        ammoRemainingPct: ammoCapacityA > 0 ? Math.round((ammoRemainingA / ammoCapacityA) * 100) : null,
+        ammoDryPct:      durationSec > 0 ? Math.round(((ammoDryTicksA * TICK_RATE) / durationSec) * 100) : 0,
       },
       b: {
         hullRemaining:   Math.round(stateB.hull),
@@ -412,9 +503,31 @@ export function runSimulation({
         totalDmgDealt:   Math.round(totalDmgB),
         effectiveDps:    parseFloat(effDpsB.toFixed(1)),
         theoreticalDps:  shipB.dps,
+        rawWeaponDps:    Math.round(Number(shipB.weaponBank?.totalBurstDps) || shipB.dps || 0),
+        legacyDps:       Math.round(Number(shipB.legacyDps) || shipB.dps || 0),
+        dpsSource:       shipB.dpsSource ?? shipB.weaponBank?.dataSource ?? 'mock',
+        damageByType:    roundedDamageBuckets(totalDmgTypesB),
+        shieldDmgDealt:  Math.round(totalShieldDmgB),
+        hullDmgDealt:    Math.round(totalHullDmgB),
+        weaponGroups:    weaponCapProfileB.weaponGroups,
         shotsFired:      totalShotsB,
         hits:            totalHitsB,
         hitPct:          totalShotsB > 0 ? Math.round((totalHitsB / totalShotsB) * 100) : 0,
+        fireTimeSec:     parseFloat((fireTicksB * TICK_RATE).toFixed(1)),
+        fireUptimePct:   durationSec > 0 ? Math.round(((fireTicksB * TICK_RATE) / durationSec) * 100) : 0,
+        weaponCapPct:    Math.round((stateB.weaponCap / weaponCapProfileB.capacity) * 100),
+        avgWeaponCapPct: avgCapPctB,
+        capStarvedPct:   durationSec > 0 ? Math.round(((capStarvedTicksB * TICK_RATE) / durationSec) * 100) : 0,
+        weaponCapCapacity: Math.round(weaponCapProfileB.capacity),
+        weaponCapRegen:  parseFloat(weaponCapProfileB.regenPerSec.toFixed(1)),
+        weaponCapDrain:  parseFloat(weaponCapProfileB.drainPerSec.toFixed(1)),
+        weaponCount:     weaponCapProfileB.weaponCount,
+        weaponDataSource: weaponCapProfileB.dataSource,
+        ammoCapacity:    ammoCapacityB,
+        ammoRemaining:   ammoRemainingB,
+        ammoSpent:       ammoSpentB,
+        ammoRemainingPct: ammoCapacityB > 0 ? Math.round((ammoRemainingB / ammoCapacityB) * 100) : null,
+        ammoDryPct:      durationSec > 0 ? Math.round(((ammoDryTicksB * TICK_RATE) / durationSec) * 100) : 0,
       },
     },
   }
@@ -526,6 +639,262 @@ function trackingHitFactor(tracking) {
   return clamp(0.70 + tracking * 0.55, 0.70, 1.25)
 }
 
+function initialWeaponCharge(profile) {
+  return weaponGroupsForProfile(profile).map(group => weaponFireInterval(group))
+}
+
+function initialWeaponAmmo(profile) {
+  return weaponGroupsForProfile(profile).map(group => {
+    const ammo = Number(group.ammoCapacity)
+    return Number.isFinite(ammo) && ammo > 0 ? ammo : Infinity
+  })
+}
+
+function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand) {
+  const groups = weaponGroupsForProfile(profile)
+  ensureWeaponChargeSlots(state, groups)
+  ensureWeaponAmmoSlots(state, groups)
+
+  if (state.capHold && state.weaponCap >= profile.resumeAt) {
+    state.capHold = false
+  }
+
+  let capStarved = wantsFire && state.capHold
+  if (!wantsFire || state.capHold) {
+    readyWeaponGroups(state, groups)
+    regenerateWeaponCap(state, profile)
+    return emptyFireResult(capStarved)
+  }
+
+  const result = emptyFireResult(false)
+
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i]
+    const interval = weaponFireInterval(group)
+    state.weaponCharge[i] = Math.min(interval + TICK_RATE, state.weaponCharge[i] + TICK_RATE)
+
+    let safety = 0
+    while (state.weaponCharge[i] >= interval && safety < 20 && !state.capHold) {
+      let volleyFired = false
+      const projectiles = Math.max(1, Math.round(Number(group.count) || 1))
+
+      for (let p = 0; p < projectiles; p++) {
+        if (state.weaponAmmo[i] <= 0) {
+          result.ammoDry = true
+          break
+        }
+
+        const capCost = weaponCapCost(group, profile)
+        if (state.weaponCap < capCost) {
+          state.capHold = true
+          capStarved = true
+          break
+        }
+
+        state.weaponCap = Math.max(0, state.weaponCap - capCost)
+        if (Number.isFinite(state.weaponAmmo[i])) {
+          state.weaponAmmo[i] = Math.max(0, state.weaponAmmo[i] - 1)
+          result.ammoSpent++
+        }
+        result.shots++
+        volleyFired = true
+
+        if (rand() < hitChance) {
+          const dmg = applyVariance(Number(group.simAlpha) || 0, variance, rand)
+          result.hits++
+          result.rawDamage += dmg
+          result.impacts.push({
+            damage: dmg,
+            profile: group.damageProfile,
+            penetration: group.penetration,
+            type: group.type,
+          })
+        }
+      }
+
+      if (!volleyFired) break
+      state.weaponCharge[i] -= interval
+      safety++
+    }
+  }
+
+  if (result.shots <= 0) {
+    regenerateWeaponCap(state, profile)
+  }
+
+  return { ...result, capStarved }
+}
+
+function emptyFireResult(capStarved = false) {
+  return { shots: 0, hits: 0, rawDamage: 0, impacts: [], ammoSpent: 0, ammoDry: false, capStarved }
+}
+
+function ensureWeaponChargeSlots(state, groups) {
+  if (!Array.isArray(state.weaponCharge)) state.weaponCharge = []
+  while (state.weaponCharge.length < groups.length) {
+    state.weaponCharge.push(weaponFireInterval(groups[state.weaponCharge.length]))
+  }
+}
+
+function ensureWeaponAmmoSlots(state, groups) {
+  if (!Array.isArray(state.weaponAmmo)) state.weaponAmmo = []
+  while (state.weaponAmmo.length < groups.length) {
+    const ammo = Number(groups[state.weaponAmmo.length]?.ammoCapacity)
+    state.weaponAmmo.push(Number.isFinite(ammo) && ammo > 0 ? ammo : Infinity)
+  }
+}
+
+function readyWeaponGroups(state, groups) {
+  groups.forEach((group, i) => {
+    const interval = weaponFireInterval(group)
+    state.weaponCharge[i] = Math.min(interval, (state.weaponCharge[i] ?? interval) + TICK_RATE)
+  })
+}
+
+function regenerateWeaponCap(state, profile) {
+  state.weaponCap = Math.min(profile.capacity, state.weaponCap + profile.regenPerSec * TICK_RATE)
+  if (state.weaponCap >= profile.resumeAt) {
+    state.capHold = false
+  }
+}
+
+function weaponGroupsForProfile(profile) {
+  if (Array.isArray(profile.weaponGroups) && profile.weaponGroups.length > 0) return profile.weaponGroups
+  return [{
+    id: 'fallback_weapon',
+    name: 'Armas',
+    count: 1,
+    rpm: 600,
+    fireIntervalSec: TICK_RATE,
+    simAlpha: (Number(profile.fallbackDps) || 0) * TICK_RATE,
+    capCostPerShot: Math.max(0.1, profile.drainPerSec * TICK_RATE),
+    damageProfile: { energy: 1 },
+  }]
+}
+
+function weaponFireInterval(group) {
+  const explicit = Number(group?.fireIntervalSec)
+  if (Number.isFinite(explicit) && explicit > 0) return explicit
+  const rpm = Number(group?.rpm) || 600
+  return Math.max(0.02, 60 / Math.max(1, rpm))
+}
+
+function weaponCapCost(group, profile) {
+  const cost = Number(group?.capCostPerShot)
+  const base = Number.isFinite(cost) && cost > 0 ? cost : profile.drainPerSec * weaponFireInterval(group)
+  return Math.max(0.05, base * (profile.capCostMult ?? 1))
+}
+
+function addDamageByProfile(target, damage, profile) {
+  const entries = Object.entries(profile && Object.keys(profile).length > 0 ? profile : { energy: 1 })
+  entries.forEach(([type, fraction]) => {
+    const f = Number(fraction) || 0
+    target[type] = (target[type] ?? 0) + damage * f
+  })
+}
+
+function addDamageBuckets(target, source) {
+  Object.entries(source ?? {}).forEach(([type, damage]) => {
+    target[type] = (target[type] ?? 0) + (Number(damage) || 0)
+  })
+}
+
+function roundedDamageBuckets(source) {
+  return Object.fromEntries(Object.entries(source ?? {})
+    .filter(([, damage]) => damage > 0)
+    .map(([type, damage]) => [type, Math.round(damage)]))
+}
+
+function ammoCapacityForProfile(profile) {
+  return weaponGroupsForProfile(profile).reduce((sum, group) => {
+    const ammo = Number(group.ammoCapacity)
+    return sum + (Number.isFinite(ammo) && ammo > 0 ? ammo : 0)
+  }, 0)
+}
+
+function ammoRemainingForState(state, profile) {
+  const groups = weaponGroupsForProfile(profile)
+  return groups.reduce((sum, group, i) => {
+    const capacity = Number(group.ammoCapacity)
+    if (!Number.isFinite(capacity) || capacity <= 0) return sum
+    const remaining = Number(state.weaponAmmo?.[i])
+    return sum + (Number.isFinite(remaining) ? Math.max(0, remaining) : capacity)
+  }, 0)
+}
+
+function weaponCapProfile(ship, pilotSkill) {
+  const bank = weaponBankForShip(ship)
+  const skill = clampPilotSkill(pilotSkill)
+  const skillDelta = skill - PILOT_SKILL_CENTER
+
+  const capacity = clamp(bank.capacity, WEAPON_CAP_MIN, WEAPON_CAP_MAX)
+  const regen = clamp(bank.regenPerSec + skill * 0.35, WEAPON_CAP_REGEN_MIN, WEAPON_CAP_REGEN_MAX)
+  const discipline = clamp(1 - skillDelta * WEAPON_CAP_SKILL_EFFICIENCY, 0.88, 1.08)
+  const drain = clamp(bank.drainPerSec * discipline, WEAPON_CAP_DRAIN_MIN, WEAPON_CAP_DRAIN_MAX)
+  const resumePct = WEAPON_CAP_RESUME_MIN + (WEAPON_CAP_RESUME_MAX - WEAPON_CAP_RESUME_MIN) * (skill / 10)
+
+  return {
+    capacity,
+    regenPerSec: regen,
+    drainPerSec: drain,
+    resumeAt: capacity * resumePct,
+    weaponCount: bank.weaponCount,
+    dataSource: bank.dataSource,
+    capCostMult: discipline,
+    fallbackDps: Number(ship?.dps) || 0,
+    weaponGroups: bank.weaponGroups,
+  }
+}
+
+function weaponBankForShip(ship) {
+  const bank = ship?.weaponBank
+  if (bank) {
+    return {
+      capacity: Number(bank.capacity) || WEAPON_CAP_MIN,
+      regenPerSec: Number(bank.regenPerSec) || WEAPON_CAP_REGEN_MIN,
+      drainPerSec: Number(bank.drainPerSec) || WEAPON_CAP_DRAIN_MIN,
+      weaponCount: Number(bank.weaponCount) || 0,
+      dataSource: bank.dataSource ?? 'mock',
+      weaponGroups: bank.weaponGroups ?? [],
+    }
+  }
+
+  const hardpointLoad = Object.entries(ship?.hardpoints ?? {}).reduce((sum, [size, count]) => {
+    const n = Number(String(size).replace('S', '')) || 1
+    return sum + n * count
+  }, 0)
+  const dps = Number(ship?.dps) || 0
+
+  return {
+    capacity: clamp(72 + hardpointLoad * 7 - dps / 35, WEAPON_CAP_MIN, WEAPON_CAP_MAX),
+    regenPerSec: clamp(12 + hardpointLoad * 0.7 + Math.max(0, 240 - dps) / 60, WEAPON_CAP_REGEN_MIN, WEAPON_CAP_REGEN_MAX),
+    drainPerSec: clamp(18 + dps * 0.095 + hardpointLoad * 0.45, WEAPON_CAP_DRAIN_MIN, WEAPON_CAP_DRAIN_MAX),
+    weaponCount: Object.values(ship?.hardpoints ?? {}).reduce((sum, count) => sum + (Number(count) || 0), 0),
+    dataSource: 'mock',
+    weaponGroups: [],
+  }
+}
+
+function updateWeaponCapacitor(state, profile, wantsFire) {
+  const cost = profile.drainPerSec * TICK_RATE
+
+  if (state.capHold && state.weaponCap >= profile.resumeAt) {
+    state.capHold = false
+  }
+
+  if (wantsFire && !state.capHold && state.weaponCap >= cost) {
+    state.weaponCap = Math.max(0, state.weaponCap - cost)
+    if (state.weaponCap < cost) state.capHold = true
+    return true
+  }
+
+  state.weaponCap = Math.min(profile.capacity, state.weaponCap + profile.regenPerSec * TICK_RATE)
+  if (state.weaponCap >= profile.resumeAt) {
+    state.capHold = false
+  }
+  return false
+}
+
 function rangeAccuracyFactor(rangeM, rOptM) {
   const over = Math.max(0, rangeM - rOptM)
   if (over <= 0) return 1
@@ -605,16 +974,110 @@ function clamp01(x) {
   return Math.min(1, Math.max(0, x))
 }
 
-/** Aplica daño a una nave: escudos primero, exceso al casco */
-function applyDamage(state, dmg, cooldownSec) {
-  if (state.shield > 0) {
-    const excess  = Math.max(0, dmg - state.shield)
-    state.shield  = Math.max(0, state.shield - dmg)
-    state.hull    = Math.max(0, state.hull - excess)
-    state.shieldTimer = Math.round(cooldownSec / TICK_RATE)
-  } else {
-    state.hull = Math.max(0, state.hull - dmg)
+/** Aplica impactos tipados: escudos, bleed físico y armor de casco. */
+function applyDamage(state, impacts, defenderShip) {
+  const result = { total: 0, shieldDamage: 0, hullDamage: 0, byType: {} }
+  if (!Array.isArray(impacts) || impacts.length === 0) return result
+
+  impacts.forEach((impact) => {
+    const profile = impact.profile && Object.keys(impact.profile).length > 0 ? impact.profile : { energy: 1 }
+    Object.entries(profile).forEach(([rawType, fraction]) => {
+      const type = normalizeDamageName(rawType)
+      const base = (Number(impact.damage) || 0) * (Number(fraction) || 0)
+      if (base <= 0) return
+
+      const penetration = penetrationValue(impact.penetration)
+      let shieldApplied = 0
+      let hullApplied = 0
+
+      if (state.shield > 0) {
+        const bleed = shieldBleedForDamage(type, penetration)
+        const shieldMult = shieldMultiplierForDamage(type)
+        const shieldRaw = base * (1 - bleed)
+        const hullRaw = base * bleed
+        const shieldScaled = shieldRaw * shieldMult
+
+        shieldApplied = Math.min(state.shield, shieldScaled)
+        state.shield = Math.max(0, state.shield - shieldApplied)
+
+        const overflowRaw = shieldMult > 0
+          ? Math.max(0, shieldScaled - shieldApplied) / shieldMult
+          : 0
+        hullApplied = applyHullDamage(state, hullRaw + overflowRaw, type, penetration, defenderShip)
+
+        if (shieldScaled > 0 || hullRaw > 0) {
+          state.shieldTimer = Math.round((defenderShip.shieldCooldown ?? 5) / TICK_RATE)
+        }
+      } else {
+        hullApplied = applyHullDamage(state, base, type, penetration, defenderShip)
+      }
+
+      const applied = shieldApplied + hullApplied
+      result.total += applied
+      result.shieldDamage += shieldApplied
+      result.hullDamage += hullApplied
+      result.byType[type] = (result.byType[type] ?? 0) + applied
+    })
+  })
+
+  return result
+}
+
+function applyHullDamage(state, rawDamage, type, penetration, ship) {
+  if (rawDamage <= 0 || state.hull <= 0) return 0
+  const applied = rawDamage * hullMultiplierForDamage(type, penetration, ship)
+  const hullApplied = Math.min(state.hull, applied)
+  state.hull = Math.max(0, state.hull - hullApplied)
+  return hullApplied
+}
+
+function shieldMultiplierForDamage(type) {
+  if (type === 'physical') return SHIELD_PHYSICAL_MULT
+  if (type === 'distortion') return SHIELD_DISTORTION_MULT
+  if (type === 'energy') return SHIELD_ENERGY_MULT
+  return 0.9
+}
+
+function shieldBleedForDamage(type, penetration) {
+  if (type !== 'physical') return 0
+  return clamp(PHYSICAL_SHIELD_BLEED_MIN + penetration * 0.08, PHYSICAL_SHIELD_BLEED_MIN, PHYSICAL_SHIELD_BLEED_MAX)
+}
+
+function hullMultiplierForDamage(type, penetration, ship) {
+  if (type === 'distortion') return 0.12
+
+  const armor = armorReductionForShip(ship)
+  if (type === 'physical') {
+    const reducedArmor = Math.max(0, armor - penetration * ARMOR_PENETRATION_SCALE)
+    return clamp(1 - reducedArmor, 0.68, 1.08)
   }
+  if (type === 'energy') return clamp(1 - armor * 1.10, 0.62, 1)
+  return clamp(1 - armor * 0.85, 0.65, 1)
+}
+
+function armorReductionForShip(ship) {
+  const sizeBase = {
+    XS: 0.04,
+    S: 0.08,
+    M: 0.14,
+    L: 0.22,
+  }[ship?.size ?? 'S'] ?? 0.08
+  const hullBonus = Math.min(0.08, (Number(ship?.hullMax) || 0) / 18000)
+  return clamp(sizeBase + hullBonus, ARMOR_REDUCTION_MIN, ARMOR_REDUCTION_MAX)
+}
+
+function penetrationValue(penetration) {
+  if (typeof penetration === 'number') return Math.max(0, penetration)
+  if (penetration && typeof penetration === 'object') {
+    return Math.max(0, Number(penetration.thickness) || Number(penetration.baseDistance) || 0)
+  }
+  return 0
+}
+
+function normalizeDamageName(type) {
+  const t = String(type || '').toLowerCase()
+  if (t === 'impact') return 'physical'
+  return t || 'energy'
 }
 
 /** Regenera escudo si el cooldown ha terminado */

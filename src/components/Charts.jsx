@@ -3,7 +3,7 @@
  * Tres gráficas del resultado usando Recharts:
  *  1. HP + escudos en el tiempo (LineChart)
  *  2. Daño acumulado (LineChart)
- *  3. DPS teórico vs efectivo (BarChart)
+ *  3. DPS simulado vs efectivo (BarChart)
  */
 
 import {
@@ -77,9 +77,9 @@ export function Charts({ result }) {
         </ResponsiveContainer>
       </div>
 
-      {/* DPS teórico vs efectivo */}
+      {/* DPS simulado vs efectivo */}
       <div className="card">
-        <div className="section-label">DPS teórico vs efectivo real</div>
+        <div className="section-label">DPS simulado vs efectivo</div>
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={dpsData} barCategoryGap="30%">
             <CartesianGrid {...GRID_STYLE} />
@@ -87,7 +87,7 @@ export function Charts({ result }) {
             <YAxis tick={AXIS_STYLE} />
             <Tooltip />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="teorico"  name="DPS teórico"  fill="rgba(136,135,128,0.30)" radius={[3,3,0,0]} />
+            <Bar dataKey="teorico"  name="DPS sim"      fill="rgba(136,135,128,0.30)" radius={[3,3,0,0]} />
             <Bar dataKey="efectivo" name="DPS efectivo" fill="#378ADD"                 radius={[3,3,0,0]} />
           </BarChart>
         </ResponsiveContainer>
