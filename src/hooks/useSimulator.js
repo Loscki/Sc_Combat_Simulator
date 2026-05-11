@@ -22,7 +22,7 @@ const DEFAULT_CONFIG = {
   simCount:    10,
   initialRangeKm: 1.5,
   randomRangePerSim: false,
-  detectionRangeKm: 2.0,
+  detectionRangeKm: 20.0,
 }
 
 export function useSimulator() {
@@ -60,7 +60,7 @@ export function useSimulator() {
         const initialRangeM = config.randomRangePerSim
           ? clampRangeM(baseRangeM * seededUniform(seed, 0.5, 1.5))
           : clampRangeM(baseRangeM)
-        const detectionRangeM = clampDetectionM((Number(config.detectionRangeKm) || 2.0) * 1000)
+        const detectionRangeM = clampDetectionM((Number(config.detectionRangeKm) || 20.0) * 1000)
         const outcome = runSimulation({
           shipA,
           shipB,
@@ -154,8 +154,8 @@ function clampRangeM(m) {
 
 function clampDetectionM(m) {
   const v = Number(m)
-  if (!Number.isFinite(v)) return 2000
-  return Math.min(6000, Math.max(200, v))
+  if (!Number.isFinite(v)) return 20000
+  return Math.min(20000, Math.max(200, v))
 }
 
 function seededUniform(seed, min, max) {

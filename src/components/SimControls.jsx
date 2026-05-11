@@ -9,7 +9,7 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
   const isMulti = config.multiSim
   const simCount = Number(config.simCount) || 1
   const rangeKm = Number(config.initialRangeKm) || 1.5
-  const detectionKm = Number(config.detectionRangeKm) || 2.0
+  const detectionKm = Number(config.detectionRangeKm) || 20.0
 
   return (
     <div className="card sim-controls">
@@ -126,12 +126,12 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
         <div className="slider-row">
           <input
             type="range"
-            min={0.5} max={6.0} step={0.1}
-            value={Math.min(6, Math.max(0.5, detectionKm))}
+            min={0.5} max={20.0} step={0.1}
+            value={Math.min(20, Math.max(0.5, detectionKm))}
             onChange={e => updateConfig({ detectionRangeKm: Number(e.target.value) })}
             aria-label="Rango base de detección en kilómetros"
           />
-          <span className="slider-val">{Math.min(6, Math.max(0.5, detectionKm)).toFixed(1)} km</span>
+          <span className="slider-val">{Math.min(20, Math.max(0.5, detectionKm)).toFixed(1)} km</span>
         </div>
         <p className="sim-hint">
           El motor aplica ±20% según la habilidad del piloto y añade retraso de reacción (skill alta reacciona antes).

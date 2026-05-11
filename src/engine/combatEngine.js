@@ -63,7 +63,7 @@ export const ENGAGE_JITTER_MPS = 45      // variación (m/s) del rango (post-mer
 export const ENGAGE_CONTROL_MPS = 55     // control por diferencia de skill (m/s)
 
 /** Modelo de detección (primer contacto / reacción) */
-export const DETECTION_RANGE_DEFAULT_M = 2000
+export const DETECTION_RANGE_DEFAULT_M = 20000
 export const DETECTION_SKILL_SCALE = 0.20 // ±20% al rango base según skill
 export const REACTION_DELAY_MIN_SEC = 0.15
 export const REACTION_DELAY_MAX_SEC = 1.25
