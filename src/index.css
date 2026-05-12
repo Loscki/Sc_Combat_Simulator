@@ -139,6 +139,93 @@ body {
 .data-source-mock { color: var(--text-secondary); }
 .combat-sources { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 
+.ship-mastery-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 0.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.ship-mastery-copy {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ship-mastery-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.ship-mastery-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 0.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ship-mastery-chart {
+  width: 100%;
+  height: 156px;
+  margin-top: 10px;
+}
+
+.ship-mastery-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ship-mastery-summary span {
+  padding: 7px 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  border: 0.5px solid var(--border-light);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: center;
+}
+
+.ship-mastery-skill-control {
+  margin-top: 12px;
+}
+
+.ship-card-skill-row {
+  margin-top: 4px;
+}
+
+.ship-chart-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 132px;
+  padding: 9px 10px;
+  border: 0.5px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+}
+
+.ship-chart-tooltip-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ship-chart-tooltip-line {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .stat-list  { display: flex; flex-direction: column; gap: 5px; }
 .stat-row   { display: flex; align-items: center; gap: 8px; }
 .stat-label { font-size: 11px; color: var(--text-secondary); min-width: 76px; }
@@ -157,12 +244,40 @@ body {
   border-top: 0.5px solid var(--border-light);
 }
 
+.ship-spec-summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ship-spec-summary::-webkit-details-marker {
+  display: none;
+}
+
 .ship-spec-title-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+  margin-bottom: 0;
+  padding: 2px 0;
+}
+
+.ship-spec-summary .ship-spec-title-row::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.ship-spec-section[open] .ship-spec-title-row {
   margin-bottom: 8px;
+}
+
+.ship-spec-section[open] .ship-spec-title-row::after {
+  content: '−';
 }
 
 .ship-spec-title {
@@ -421,6 +536,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   .ship-combat-grid { grid-template-columns: 1fr; }
   .ship-spec-row { grid-template-columns: 1fr; gap: 2px; }
   .ship-spec-value-wrap { align-items: flex-start; }
+  .ship-spec-title-row { align-items: flex-start; flex-direction: column; }
+  .ship-mastery-badges { justify-content: flex-start; }
+  .ship-mastery-summary { grid-template-columns: 1fr; }
   .ship-spec-value,
   .ship-spec-row-sub { text-align: left; }
   .ship-value-tooltip {

@@ -32,36 +32,9 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
       </div>
 
       {!isStatic ? (
-        <>
-          <div className="section-label">Habilidad del piloto (0–10)</div>
-          <p className="sim-hint">
-            En 5 se usan precisión y evasión de la ficha. Por debajo bajan ambas; por encima suben.
-          </p>
-          <div className="pilot-skills">
-            <div className="slider-row pilot-skill-row">
-              <span className="pilot-skill-label tag tag-blue">Alfa</span>
-              <input
-                type="range"
-                min={0} max={10} step={1}
-                value={config.pilotSkillA}
-                onChange={e => updateConfig({ pilotSkillA: Number(e.target.value) })}
-                aria-label="Habilidad del piloto Alfa"
-              />
-              <span className="slider-val">{config.pilotSkillA}</span>
-            </div>
-            <div className="slider-row pilot-skill-row">
-              <span className="pilot-skill-label tag tag-coral">Beta</span>
-              <input
-                type="range"
-                min={0} max={10} step={1}
-                value={config.pilotSkillB}
-                onChange={e => updateConfig({ pilotSkillB: Number(e.target.value) })}
-                aria-label="Habilidad del piloto Beta"
-              />
-              <span className="slider-val">{config.pilotSkillB}</span>
-            </div>
-          </div>
-        </>
+        <p className="sim-hint">
+          Ajusta el nivel de cada piloto desde la ficha de su nave, justo debajo de la curva por habilidad.
+        </p>
       ) : (
         <div className="static-mode-box">
           <div className="section-label">Banco de pruebas estático</div>

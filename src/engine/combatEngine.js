@@ -1,3 +1,5 @@
+import { adjustPilotSkillForShip, clampPilotSkill, PILOT_SKILL_CENTER } from '../lib/pilotMastery.js'
+
 /**
  * combatEngine.js — Motor de simulación de combate
  *
@@ -50,8 +52,6 @@ export const TICK_RATE      = 0.1   // segundos por tick
 export const TICKS_PER_SEC  = Math.round(1 / TICK_RATE)
 export const DRAW_THRESHOLD = 0.05  // diferencia mínima para no ser empate
 
-/** Centro de la escala de habilidad (stats de nave sin ajuste) */
-export const PILOT_SKILL_CENTER = 5
 /** ±0.20 a precisión/evasión en los extremos 0 y 10 */
 export const PILOT_SKILL_STEP   = 0.04
 /** Varianza de daño por tick (depende de la habilidad del piloto) */
@@ -90,6 +90,7 @@ export const TRACKING_MERGE_PENALTY = 0.08
 export const DEFENSIVE_SKILL_PRESSURE_MAX = 0.26
 export const FIRE_CONTROL_MIN = 0.28      // skill 0: convierte poca ventana en fuego útil
 export const FIRE_CONTROL_MAX = 0.90      // skill 10: capitaliza casi toda la ventana
+export const OPPORTUNITY_EFFICIENCY_FLOOR = 0.18
 export const EVASION_HIT_PENALTY_MIN = 0.48 // skill 10: lee mejor la evasión rival
 export const EVASION_HIT_PENALTY_MAX = 0.78 // skill 0: sufre más la evasión rival
 export const DUEL_SKILL_HIT_SWING = 0.22
@@ -167,8 +168,10 @@ export function runSimulation({
   const seedUsed = normalizeSeed(seed)
   const rng = createRng(seedUsed)
 
-  const skillAUsed = isStatic ? PILOT_SKILL_CENTER : pilotSkillA
-  const skillBUsed = isStatic ? PILOT_SKILL_CENTER : pilotSkillB
+  const rawSkillAUsed = isStatic ? PILOT_SKILL_CENTER : pilotSkillA
+  const rawSkillBUsed = isStatic ? PILOT_SKILL_CENTER : pilotSkillB
+  const skillAUsed = isStatic ? PILOT_SKILL_CENTER : adjustPilotSkillForShip(shipA, rawSkillAUsed)
+  const skillBUsed = isStatic ? PILOT_SKILL_CENTER : adjustPilotSkillForShip(shipB, rawSkillBUsed)
   const accA = isStatic ? 1 : effectiveAccuracy(shipA, skillAUsed)
   const evaA = isStatic ? 0 : effectiveEvasion(shipA, skillAUsed)
   const accB = isStatic ? 1 : effectiveAccuracy(shipB, skillBUsed)
@@ -189,10 +192,10 @@ export function runSimulation({
 
   const detectionA = isStatic
     ? { rangeM: DETECTION_RANGE_MAX_M, radarStrength: 1, signatureScore: 1 }
-    : detectionForPilot(shipA, shipB, detectionRangeM, skillAUsed)
+    : detectionForPilot(shipA, shipB, detectionRangeM, rawSkillAUsed)
   const detectionB = isStatic
     ? { rangeM: DETECTION_RANGE_MAX_M, radarStrength: 1, signatureScore: 1 }
-    : detectionForPilot(shipB, shipA, detectionRangeM, skillBUsed)
+    : detectionForPilot(shipB, shipA, detectionRangeM, rawSkillBUsed)
   const detectA = detectionA.rangeM
   const detectB = detectionB.rangeM
   let detectedA = isStatic
@@ -276,9 +279,11 @@ export function runSimulation({
   let totalShotsA = 0, totalHitsA = 0
   let totalShotsB = 0, totalHitsB = 0
   let fireTicksA = 0, fireTicksB = 0
+  let opportunityTicksA = 0, opportunityTicksB = 0
   let capStarvedTicksA = 0, capStarvedTicksB = 0
   let capSumA = 0, capSumB = 0
   let capSamples = 0
+  let shieldDownCountA = 0, shieldDownCountB = 0
 
   // Flags de eventos únicos
   const fired = {
@@ -298,12 +303,12 @@ export function runSimulation({
     // Detección / reacción
     if (!isStatic && !detectedA && rangeM <= detectA) {
       detectedA = true
-      readyAtA = secNow + reactionDelaySec(skillAUsed)
+      readyAtA = secNow + reactionDelaySec(rawSkillAUsed)
       events.push({ t: secNow, text: `${shipA.name} detecta al objetivo`, side: 'a' })
     }
     if (!isStatic && !detectedB && rangeM <= detectB) {
       detectedB = true
-      readyAtB = secNow + reactionDelaySec(skillBUsed)
+      readyAtB = secNow + reactionDelaySec(rawSkillBUsed)
       events.push({ t: secNow, text: `${shipB.name} detecta al objetivo`, side: 'b' })
     }
 
@@ -341,12 +346,12 @@ export function runSimulation({
     const rangeFactorA = isStatic ? 1 : rangeAccuracyFactor(rangeM, rOptA)
     const rangeFactorB = isStatic ? 1 : rangeAccuracyFactor(rangeM, rOptB)
 
-    const staticCanFireA = Boolean(staticFireA) && rangeM <= fireRangeA
-    const staticCanFireB = Boolean(staticFireB) && rangeM <= fireRangeB
-    const inFireEnvelopeA = isStatic ? staticCanFireA : detectedA && secNow >= readyAtA && rangeM <= fireRangeA
-    const inFireEnvelopeB = isStatic ? staticCanFireB : detectedB && secNow >= readyAtB && rangeM <= fireRangeB
-    const trackingA = isStatic ? 1 : (inFireEnvelopeA ? trackingQuality(shipA, shipB, skillAUsed, skillBUsed, rangeFactorA, inMergeWindow, rng) : 0)
-    const trackingB = isStatic ? 1 : (inFireEnvelopeB ? trackingQuality(shipB, shipA, skillBUsed, skillAUsed, rangeFactorB, inMergeWindow, rng) : 0)
+    const engagementWindowA = isStatic ? rangeM <= fireRangeA : detectedA && secNow >= readyAtA && rangeM <= fireRangeA
+    const engagementWindowB = isStatic ? rangeM <= fireRangeB : detectedB && secNow >= readyAtB && rangeM <= fireRangeB
+    const inFireEnvelopeA = isStatic ? engagementWindowA && Boolean(staticFireA) : engagementWindowA
+    const inFireEnvelopeB = isStatic ? engagementWindowB && Boolean(staticFireB) : engagementWindowB
+    const trackingA = isStatic ? 1 : (engagementWindowA ? trackingQuality(shipA, shipB, skillAUsed, skillBUsed, rangeFactorA, inMergeWindow, rng) : 0)
+    const trackingB = isStatic ? 1 : (engagementWindowB ? trackingQuality(shipB, shipA, skillBUsed, skillAUsed, rangeFactorB, inMergeWindow, rng) : 0)
     const wantsFireA = inFireEnvelopeA
     const wantsFireB = inFireEnvelopeB
     const fireControlA = isStatic ? 1 : firingWindowFactor(trackingA, skillAUsed)
@@ -358,6 +363,16 @@ export function runSimulation({
     const hitChanceB = isStatic
       ? (wantsFireB ? 1 : 0)
       : wantsFireB ? clamp01((accB * rangeFactorB) * evasionHitFactor(evaA, skillBUsed) * duelSkillHitFactor(skillBUsed, skillAUsed) * trackingHitFactor(trackingB) - mergeBias) : 0
+    const effectiveHitChanceA = isStatic ? hitChanceA : hitChanceA * averageWeaponTrackingFactor(weaponCapProfileA, shipB, skillBUsed, skillAUsed)
+    const effectiveHitChanceB = isStatic ? hitChanceB : hitChanceB * averageWeaponTrackingFactor(weaponCapProfileB, shipA, skillAUsed, skillBUsed)
+    const opportunityEfficiencyA = fireControlA * effectiveHitChanceA
+    const opportunityEfficiencyB = fireControlB * effectiveHitChanceB
+    const opportunityA = isStatic
+      ? inFireEnvelopeA
+      : engagementWindowA && opportunityEfficiencyA >= OPPORTUNITY_EFFICIENCY_FLOOR
+    const opportunityB = isStatic
+      ? inFireEnvelopeB
+      : engagementWindowB && opportunityEfficiencyB >= OPPORTUNITY_EFFICIENCY_FLOOR
 
     const varA = isStatic ? 0 : varianceForShot(vA, rangeM, rOptA, inMergeWindow)
     const varB = isStatic ? 0 : varianceForShot(vB, rangeM, rOptB, inMergeWindow)
@@ -379,7 +394,11 @@ export function runSimulation({
 
     if (fireA.shots > 0) { secShotsA += fireA.shots; totalShotsA += fireA.shots; fireTicksA++ }
     if (fireB.shots > 0) { secShotsB += fireB.shots; totalShotsB += fireB.shots; fireTicksB++ }
+    if (opportunityA) opportunityTicksA++
+    if (opportunityB) opportunityTicksB++
 
+    const shieldBeforeImpactB = stateB.shield
+    const shieldBeforeImpactA = stateA.shield
     const appliedA = applyDamage(stateB, fireA.impacts, shipB)
     const appliedB = applyDamage(stateA, fireB.impacts, shipA)
     const dmgAonB = appliedA.total
@@ -414,6 +433,13 @@ export function runSimulation({
     capSamples++
 
     // Detección de eventos
+    if (appliedB.shieldDamage > 0 && stateA.shield <= 0 && shieldBeforeImpactA > 0) {
+      shieldDownCountA++
+    }
+    if (appliedA.shieldDamage > 0 && stateB.shield <= 0 && shieldBeforeImpactB > 0) {
+      shieldDownCountB++
+    }
+
     if (!fired.bShieldDown && stateB.shield <= 0) {
       fired.bShieldDown = true
       events.push({ t: secNow, text: `Escudo de ${shipB.name} destruido`, side: 'b' })
@@ -552,8 +578,13 @@ export function runSimulation({
         shotsFired:      totalShotsA,
         hits:            totalHitsA,
         hitPct:          totalShotsA > 0 ? Math.round((totalHitsA / totalShotsA) * 100) : 0,
+        avgDamagePerShot: totalShotsA > 0 ? parseFloat((totalDmgA / totalShotsA).toFixed(1)) : 0,
+        avgDamagePerHit:  totalHitsA > 0 ? parseFloat((totalDmgA / totalHitsA).toFixed(1)) : 0,
+        shieldDowns:     shieldDownCountA,
         fireTimeSec:     parseFloat((fireTicksA * TICK_RATE).toFixed(1)),
         fireUptimePct:   durationSec > 0 ? Math.round(((fireTicksA * TICK_RATE) / durationSec) * 100) : 0,
+        opportunityTimeSec: parseFloat((opportunityTicksA * TICK_RATE).toFixed(1)),
+        opportunityUptimePct: durationSec > 0 ? Math.round(((opportunityTicksA * TICK_RATE) / durationSec) * 100) : 0,
         weaponCapPct:    Math.round((stateA.weaponCap / weaponCapProfileA.capacity) * 100),
         avgWeaponCapPct: avgCapPctA,
         capStarvedPct:   durationSec > 0 ? Math.round(((capStarvedTicksA * TICK_RATE) / durationSec) * 100) : 0,
@@ -595,8 +626,13 @@ export function runSimulation({
         shotsFired:      totalShotsB,
         hits:            totalHitsB,
         hitPct:          totalShotsB > 0 ? Math.round((totalHitsB / totalShotsB) * 100) : 0,
+        avgDamagePerShot: totalShotsB > 0 ? parseFloat((totalDmgB / totalShotsB).toFixed(1)) : 0,
+        avgDamagePerHit:  totalHitsB > 0 ? parseFloat((totalDmgB / totalHitsB).toFixed(1)) : 0,
+        shieldDowns:     shieldDownCountB,
         fireTimeSec:     parseFloat((fireTicksB * TICK_RATE).toFixed(1)),
         fireUptimePct:   durationSec > 0 ? Math.round(((fireTicksB * TICK_RATE) / durationSec) * 100) : 0,
+        opportunityTimeSec: parseFloat((opportunityTicksB * TICK_RATE).toFixed(1)),
+        opportunityUptimePct: durationSec > 0 ? Math.round(((opportunityTicksB * TICK_RATE) / durationSec) * 100) : 0,
         weaponCapPct:    Math.round((stateB.weaponCap / weaponCapProfileB.capacity) * 100),
         avgWeaponCapPct: avgCapPctB,
         capStarvedPct:   durationSec > 0 ? Math.round(((capStarvedTicksB * TICK_RATE) / durationSec) * 100) : 0,
@@ -620,12 +656,6 @@ export function runSimulation({
 }
 
 // ── HELPERS INTERNOS ────────────────────────────────────────────
-
-function clampPilotSkill(n) {
-  const v = Number(n)
-  if (!Number.isFinite(v)) return PILOT_SKILL_CENTER
-  return Math.min(10, Math.max(0, v))
-}
 
 function normalizeSeed(seed) {
   if (seed === undefined || seed === null || seed === '') return Date.now()
@@ -809,6 +839,22 @@ function weaponTrackingVsTargetFactor(group, defenderShip, defenderSkill = PILOT
   )
 
   return clamp(0.5 + weaponTracking * 0.5 + attackerBonus - penalty, 0.35, 1.14)
+}
+
+function averageWeaponTrackingFactor(profile, defenderShip, defenderSkill = PILOT_SKILL_CENTER, attackerSkill = PILOT_SKILL_CENTER) {
+  const groups = weaponGroupsForProfile(profile)
+  if (groups.length === 0) return 1
+
+  let weightedSum = 0
+  let totalWeight = 0
+
+  groups.forEach((group) => {
+    const weight = Math.max(1, Number(group?.simBurstDps) || 0)
+    weightedSum += weaponTrackingVsTargetFactor(group, defenderShip, defenderSkill, attackerSkill) * weight
+    totalWeight += weight
+  })
+
+  return totalWeight > 0 ? weightedSum / totalWeight : 1
 }
 
 function initialWeaponCharge(profile) {

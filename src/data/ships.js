@@ -26,6 +26,7 @@ import {
   componentLabel,
   componentOptionsForSlot,
 } from './components.js'
+import { buildPilotEfficiencyCurve } from '../lib/pilotMastery.js'
 import { WEAPON_CATALOG, WEAPON_DAMAGE_TO_SIM_SCALE, WEAPON_DPS_TO_SIM_SCALE, calibratedWeaponDps, weaponMount } from './weapons.js'
 
 const BODY_HP_OVERRIDES = {
@@ -34,6 +35,50 @@ const BODY_HP_OVERRIDES = {
   mrai_guardian: 7100,
   mrai_guardian_qi: 7100,
   mrai_guardian_mx: 7100,
+}
+
+const PILOT_MASTERY_OVERRIDES = {
+  anvl_arrow: {
+    pilotDemandScore: 0.72,
+    pilotSkillOffset: -0.36,
+    pilotSkillScale: 1.18,
+    pilotSkillPivot: 7,
+    pilotSkillScaleLow: 0.42,
+    pilotSkillScaleHigh: 1.56,
+    pilotSkillExponentLow: 1.7,
+  },
+  aegs_gladius: {
+    pilotDemandScore: 0.38,
+    pilotSkillOffset: 0.18,
+    pilotSkillScale: 0.96,
+    pilotSkillPivot: 5.8,
+    pilotSkillScaleLow: 0.98,
+    pilotSkillScaleHigh: 0.94,
+  },
+  mrai_guardian: {
+    pilotDemandScore: 0.22,
+    pilotSkillOffset: 0.24,
+    pilotSkillScale: 0.90,
+    pilotSkillPivot: 5.6,
+    pilotSkillScaleLow: 0.96,
+    pilotSkillScaleHigh: 0.88,
+  },
+  mrai_guardian_qi: {
+    pilotDemandScore: 0.24,
+    pilotSkillOffset: 0.22,
+    pilotSkillScale: 0.90,
+    pilotSkillPivot: 5.6,
+    pilotSkillScaleLow: 0.96,
+    pilotSkillScaleHigh: 0.88,
+  },
+  mrai_guardian_mx: {
+    pilotDemandScore: 0.22,
+    pilotSkillOffset: 0.24,
+    pilotSkillScale: 0.90,
+    pilotSkillPivot: 5.6,
+    pilotSkillScaleLow: 0.96,
+    pilotSkillScaleHigh: 0.88,
+  },
 }
 
 const BASE_SHIPS = {
@@ -948,7 +993,7 @@ export function getShipForLoadout(shipId, loadoutId = STOCK_LOADOUT_ID, customCo
   const baseShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(BASE_SHIPS[shipId] ?? BASE_SHIPS.aegs_gladius)))
   const componentShip = withComponentOverrides(baseShip, customConfig)
   const weaponShip = withWeaponDefaults(componentShip, loadoutId, customConfig)
-  const resolvedShip = withCombatMetrics(withSensorDefaults(weaponShip))
+  const resolvedShip = withCombatMetrics(withPilotMasteryProfile(withSensorDefaults(weaponShip)))
 
   return {
     ...resolvedShip,
@@ -1732,6 +1777,66 @@ function withSensorDefaults(ship) {
   return { ...ship, radarStrength, sigEM, sigIR, sigCS, signatureProfile }
 }
 
+function withPilotMasteryProfile(ship) {
+  const derived = derivedPilotMasteryProfile(ship)
+  const override = PILOT_MASTERY_OVERRIDES[ship.id] ?? {}
+
+  return {
+    ...ship,
+    pilotDemandScore: round2(Number.isFinite(Number(override.pilotDemandScore)) ? Number(override.pilotDemandScore) : derived.pilotDemandScore),
+    pilotSkillOffset: round2(Number.isFinite(Number(override.pilotSkillOffset)) ? Number(override.pilotSkillOffset) : derived.pilotSkillOffset),
+    pilotSkillScale: round2(Number.isFinite(Number(override.pilotSkillScale)) ? Number(override.pilotSkillScale) : derived.pilotSkillScale),
+    pilotSkillPivot: round2(Number.isFinite(Number(override.pilotSkillPivot)) ? Number(override.pilotSkillPivot) : derived.pilotSkillPivot),
+    pilotSkillScaleLow: round2(Number.isFinite(Number(override.pilotSkillScaleLow)) ? Number(override.pilotSkillScaleLow) : derived.pilotSkillScaleLow),
+    pilotSkillScaleHigh: round2(Number.isFinite(Number(override.pilotSkillScaleHigh)) ? Number(override.pilotSkillScaleHigh) : derived.pilotSkillScaleHigh),
+    pilotSkillExponentLow: round2(Number.isFinite(Number(override.pilotSkillExponentLow)) ? Number(override.pilotSkillExponentLow) : derived.pilotSkillExponentLow),
+  }
+}
+
+function derivedPilotMasteryProfile(ship) {
+  const evasion = clamp(0, Number(ship.evasion) || 0.25, 1)
+  const thruster = clamp(0, Number(ship.thrusterScore) || evasion, 1)
+  const strafe = clamp(0, Number(ship.strafeThrusterScore) || thruster, 1)
+  const boost = clamp(0, Number(ship.boostThrusterScore) || thruster, 1)
+  const zeroToScm = Number(ship.zeroToScm)
+  const accelerationDemand = Number.isFinite(zeroToScm)
+    ? clamp(0, (4.8 - zeroToScm) / 3.6, 1)
+    : thruster
+  const agilityDemand = clamp(0, evasion * 0.20 + thruster * 0.30 + strafe * 0.22 + boost * 0.18 + accelerationDemand * 0.10, 1)
+
+  const bodyHp = Number(ship.vitalHullMax) || 0
+  const fragilityDemand = bodyHp > 0
+    ? clamp(0, (3200 - bodyHp) / 1800, 1)
+    : clamp(0, (2400 - (Number(ship.hullMax) || 0)) / 1400, 1)
+
+  const roleText = `${ship.role || ''} ${ship.name || ''}`
+  const roleDemandBonus = /interceptor|racer|snub/i.test(roleText)
+    ? 0.08
+    : /heavy fighter|gunship|bomber/i.test(roleText)
+      ? -0.08
+      : /fighter/i.test(roleText)
+        ? -0.03
+        : 0
+
+  const pilotDemandScore = clamp(0.12, agilityDemand * 0.62 + fragilityDemand * 0.18 + roleDemandBonus, 0.82)
+  const pilotSkillOffset = clamp(-0.45, (0.44 - pilotDemandScore) * 1.35, 0.28)
+  const pilotSkillScale = clamp(0.88, 0.92 + pilotDemandScore * 0.28, 1.16)
+  const pilotSkillPivot = clamp(5.5, 5.45 + pilotDemandScore * 1.55, 7.1)
+  const pilotSkillScaleLow = clamp(0.78, pilotSkillScale * (0.86 - pilotDemandScore * 0.10), 1.02)
+  const pilotSkillScaleHigh = clamp(0.92, pilotSkillScale * (1.04 + pilotDemandScore * 0.08), 1.28)
+  const pilotSkillExponentLow = clamp(1.18, 1.18 + pilotDemandScore * 0.42, 1.55)
+
+  return {
+    pilotDemandScore,
+    pilotSkillOffset,
+    pilotSkillScale,
+    pilotSkillPivot,
+    pilotSkillScaleLow,
+    pilotSkillScaleHigh,
+    pilotSkillExponentLow,
+  }
+}
+
 function withCombatMetrics(ship) {
   const weaponry = weaponryMetricsForShip(ship)
   const armor = armorMetricsForShip(ship)
@@ -1754,6 +1859,13 @@ function withCombatMetrics(ship) {
       armor,
       flight,
       computed,
+      mastery: {
+        demandPct: Math.round((Number(ship.pilotDemandScore) || 0) * 100),
+        skillOffset: round2(Number(ship.pilotSkillOffset) || 0),
+        skillScale: round2(Number(ship.pilotSkillScale) || 1),
+        pivotSkill: round2(Number(ship.pilotSkillPivot) || 0),
+        efficiencyCurve: buildPilotEfficiencyCurve(ship, 0.1, computed.maneuverabilityPct),
+      },
     },
   }
 }
@@ -2003,7 +2115,7 @@ function formatCompactNumber(value) {
 export const SHIPS = Object.fromEntries(
   Object.entries(BASE_SHIPS).map(([id, ship]) => {
     const realShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(ship)))
-    return [id, withCombatMetrics(withSensorDefaults(withWeaponDefaults(realShip)))]
+    return [id, withCombatMetrics(withPilotMasteryProfile(withSensorDefaults(withWeaponDefaults(realShip))))]
   })
 )
 

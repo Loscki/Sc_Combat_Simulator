@@ -59,6 +59,190 @@ No borrar entradas antiguas: este archivo es memoria historica del proyecto.
 
 ## Historial
 
+### 2026-05-12 - Curva de eficiencia por habilidad en la ficha de nave
+
+Objetivo:
+Mostrar visualmente como escala cada nave con la habilidad del piloto, para
+entender de un vistazo que naves son faciles de exprimir y cuales requieren
+mas manos, como la Arrow.
+
+Archivos tocados:
+- `src/lib/pilotMastery.js`
+- `src/engine/combatEngine.js`
+- `src/data/ships.js`
+- `src/components/ShipCard.jsx`
+- `src/App.jsx`
+- `src/index.css`
+
+Decision:
+Se extrae la curva de maestria del piloto a una utilidad compartida para no
+duplicar la logica entre motor y UI.
+
+La ficha de cada nave muestra ahora, justo debajo del configurador de
+componentes, una grafica compacta con:
+- eficiencia relativa por skill `0-10`;
+- skill actual resaltada;
+- skill efectiva correspondiente;
+- dificultad de explotacion y skill de despegue.
+
+La metrica pintada en la curva es "porcentaje del potencial de la nave que ese
+piloto esta desbloqueando", normalizado contra el rendimiento de esa misma
+nave a `skill 10`.
+
+Verificacion:
+- la ficha de Alfa y Beta muestra la nueva grafica sin romper el layout;
+- la Arrow presenta una subida mas tardia que la Gladius;
+- `npm run build` correcto.
+
+Refinamiento posterior:
+- el primer diseno de la curva servia para leer aprovechamiento interno de
+  cada nave, pero no ayudaba bien al usuario a responder "con mi nivel, a que
+  nave le sacare mas partido";
+- se redefine la lectura como `partido potencial`, premiando mas el techo que
+  una nave exigente y maniobrable puede desbloquear en skills altas;
+- ademas se corrige el margen izquierdo del eje para que las etiquetas del
+  grafico no aparezcan cortadas.
+- el slider de habilidad de cada piloto se mueve desde el panel central a la
+  propia ficha de nave, justo debajo de su curva, para que lectura y ajuste
+  queden en el mismo sitio.
+- los sliders pasan a trabajar con decimas (`0.1`) y la curva se densifica
+  tambien a decimas, para que el usuario pueda identificarse mejor con niveles
+  como `6.5` u `8.1` y comparar progresiones con mas finura.
+- se corrige un bug donde la curva seguia generandose internamente a pasos de
+  `1` aunque el slider ya usaba decimas; eso hacia que valores como `7.5`
+  heredasen el punto vecino y diesen lecturas engañosas.
+- se reajusta ligeramente el bonus de desbloqueo de naves exigentes para que
+  la Arrow ya supere a la Gladius alrededor de `7.5`, manteniendo a la
+  Gladius por delante en skills medias.
+- se suaviza despues la progresion alta de la Arrow con una curva de
+  desbloqueo menos lineal, para que entre `7.5` y `8.0` gane valor de forma
+  mas gradual en vez de dispararse demasiado rapido.
+- el techo de la curva deja de estar capado en `100`: ese valor pasa a leerse
+  como referencia de eficiencia plena, pero naves con mas techo y peor
+  accesibilidad, como la Arrow, pueden superar ese nivel en manos muy buenas.
+- el eje Y del grafico se vuelve dinamico para mostrar correctamente valores
+  por encima de `100`.
+- las secciones de atributos de la ficha (`Casco`, `Armamento`, `Blindaje`,
+  `Vuelo`, `Aceleraciones`, `Calculo`) pasan a mostrarse como desplegables
+  cerrados por defecto para reducir altura y ruido visual.
+
+### 2026-05-12 - La Arrow empieza a despegar a partir de skill 7
+
+Objetivo:
+Suavizar la progresion de dominio de la Arrow para que no empiece a rendir
+como una nave claramente superior ya en `6 vs 5`. La intencion es que el
+piloto empiece a sacarle verdadero partido a partir de `skill 7`.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+
+Decision:
+Se recalibra solo la curva de maestria de la Arrow:
+- mayor penalizacion base en skill media;
+- tramo `5 -> 7` mas perezoso;
+- escalado alto conservado para que el techo siga siendo muy fuerte.
+
+Tecnica aplicada:
+- nuevos overrides de Arrow para `pilotSkillOffset`, `pilotSkillPivot`,
+  `pilotSkillScaleLow` y `pilotSkillScaleHigh`;
+- se anade `pilotSkillExponentLow` para poder retrasar el crecimiento por
+  debajo del pivote sin aplastar el escalado de skills altas.
+
+Verificacion:
+- Arrow vs Gladius, 3 min, seed `42`:
+  - `5 vs 5`: gana Gladius;
+  - `6 vs 5`: ya no gana Arrow, queda en zona de empate/transicion;
+  - `7 vs 5`: Arrow ya empieza a sacar ventaja real;
+  - `8 vs 5`: Arrow mantiene un escalado alto y resuelve el duelo.
+- Arrow vs Guardian, 3 min, seed `42`:
+  - `7 vs 5`: aun no garantiza victoria, pero mejora su presion sin romper
+    la ventaja estructural de la Guardian.
+- `npm run build` correcto.
+
+### 2026-05-12 - Panel de resultados centrado en métricas de combate
+
+Objetivo:
+Reducir ruido en la lectura de cada simulación y dejar el panel centrado en
+los datos que de verdad explican el combate: estado final de `Body` y `Hull`,
+roturas de escudo, oportunidad de tiro, disparos/impactos, daño y una medida
+resumida de letalidad.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+
+Decision:
+Se simplifica la UI de resultados y se eliminan del panel datos repetidos o
+más propios de configuración de nave que de lectura del combate.
+
+El motor añade ahora métricas nuevas por nave:
+- `shieldBreaks`: cuántas veces el escudo rival cayó a `0`;
+- `opportunityTimeSec` / `opportunityUptimePct`: tiempo real con ventana de tiro;
+- `avgDamagePerShot` / `avgDamagePerHit`: daño medio para lectura rápida.
+
+Con esos datos, el panel por nave pasa a mostrar:
+- distancia de detección;
+- `Body` restante;
+- `Hull` restante;
+- veces que el escudo llegó a `0`;
+- ventana de oportunidad;
+- disparos / impactos;
+- daño medio;
+- daño total;
+- `Letalidad`.
+
+La `Letalidad` se presenta como un índice sintético 0-100, con mayor peso en
+el progreso de destrucción del `Body` rival.
+
+Verificacion:
+- Gladius vs Arrow, 3 min, seed `42`:
+  - ambas naves muestran ahora `Body`, `Hull`, `Escudo a 0`, `Ventana de oportunidad`,
+    `Disparos / impactos`, `Daño medio`, `Daño total` y `Letalidad`;
+  - el motor devuelve correctamente las nuevas métricas:
+    - ejemplo Alfa: `shieldBreaks = 1`, `opportunityUptimePct = 99`,
+      `avgDamagePerHit = 6.8`.
+- `npm run build` vuelve a pasar correctamente.
+
+Correccion posterior:
+- La primera definicion de `Ventana de oportunidad` resulto demasiado amplia:
+  estaba demasiado cerca de "tiempo en rango" y arrojaba valores irreales como
+  `99%` para ambos bandos en Gladius vs Arrow a skill `5 vs 5`.
+- Se redefine para medir solo el tiempo en que la nave puede convertir la
+  ventana en daño útil, usando una combinacion de `fireControl` y probabilidad
+  efectiva final de impacto por arma/objetivo.
+- Ademas, el contador de escudo en UI deja de representar "escudos rotos al
+  rival" y pasa a representar cuantas veces el escudo de esa nave cayó a `0`.
+
+Verificacion ajustada:
+- Gladius vs Arrow, 3 min, seed `42`:
+  - Gladius: `22%` de ventana de oportunidad;
+  - Arrow: `71%` de ventana de oportunidad;
+  - ambas con `1` caida de escudo a `0`.
+
+Refinamiento posterior 2:
+- Se introduce una capa de `mastery` / exigencia de pilotaje por nave.
+- Objetivo: separar "nave capaz" de "nave facil de exprimir".
+- Efecto buscado:
+  - la Gladius ofrece mejor rendimiento a igualdad de skill media;
+  - la Arrow penaliza mas al piloto medio, pero escala mas cuando el piloto es
+    claramente superior.
+
+Implementacion:
+- `src/data/ships.js` añade:
+  - perfil derivado `pilotDemandScore`, `pilotSkillOffset`, `pilotSkillScale`;
+  - overrides calibrados para Arrow, Gladius y Guardian.
+- `src/engine/combatEngine.js` usa una `shipAdjustedPilotSkill()` para la parte
+  puramente de combate, manteniendo la skill bruta para sensores/reaccion.
+
+Verificacion ajustada 2:
+- Arrow vs Gladius, `5 vs 5`, seed `42`:
+  - gana Gladius por estado final;
+- Arrow vs Gladius, `8 vs 5`:
+  - Arrow destruye en `136.8s`;
+- Arrow vs Guardian, `8 vs 5`:
+  - Arrow destruye en `162.2s`.
+
 ### 2026-05-12 - La habilidad del piloto pesa mas contra blancos grandes
 
 Objetivo:

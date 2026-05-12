@@ -72,20 +72,24 @@ export default function App() {
           <ShipCard
             ship={shipA}
             shipId={config.shipAId}
+            pilotSkill={config.pilotSkillA}
             ships={ships}
             side="a"
             onSelectShip={(nextId) => updateConfig({ shipAId: nextId, shipALoadoutId: 'stock', shipACustomConfig: { weaponsBySlot: {}, components: {} } })}
             onSelectWeapon={(slotId, weaponId) => updateShipWeapon('a', slotId, weaponId)}
             onSelectComponent={(componentType, componentId) => updateShipComponent('a', componentType, componentId)}
+            onPilotSkillChange={(value) => updateConfig({ pilotSkillA: value })}
           />
           <ShipCard
             ship={shipB}
             shipId={config.shipBId}
+            pilotSkill={config.pilotSkillB}
             ships={ships}
             side="b"
             onSelectShip={(nextId) => updateConfig({ shipBId: nextId, shipBLoadoutId: 'stock', shipBCustomConfig: { weaponsBySlot: {}, components: {} } })}
             onSelectWeapon={(slotId, weaponId) => updateShipWeapon('b', slotId, weaponId)}
             onSelectComponent={(componentType, componentId) => updateShipComponent('b', componentType, componentId)}
+            onPilotSkillChange={(value) => updateConfig({ pilotSkillB: value })}
           />
         </div>
         <SimControls

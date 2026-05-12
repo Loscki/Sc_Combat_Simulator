@@ -3,14 +3,18 @@
  * Ficha de combate centrada en datos reales de nave y metricas calculadas.
  */
 
+import { CartesianGrid, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+
 export function ShipCard({
   ship,
   shipId,
+  pilotSkill,
   ships,
   side,
   onSelectShip,
   onSelectWeapon,
   onSelectComponent,
+  onPilotSkillChange,
 }) {
   const isA = side === 'a'
   const color = isA ? '#378ADD' : '#D85A30'
@@ -25,7 +29,10 @@ export function ShipCard({
   const armor = metrics.armor ?? {}
   const flight = metrics.flight ?? {}
   const computed = metrics.computed ?? {}
+  const mastery = metrics.mastery ?? {}
   const accelerations = flight.accelerations ?? {}
+  const efficiencyCurve = Array.isArray(mastery.efficiencyCurve) ? mastery.efficiencyCurve : []
+  const currentCurvePoint = closestCurvePoint(efficiencyCurve, pilotSkill)
 
   const shipList = Object.values(ships).sort((s1, s2) => {
     const m = s1.manufacturer.localeCompare(s2.manufacturer)
@@ -112,6 +119,18 @@ export function ShipCard({
             </div>
           )}
         </div>
+      )}
+
+      {efficiencyCurve.length > 0 && (
+        <PilotEfficiencyPanel
+          color={color}
+          curve={efficiencyCurve}
+          currentSkill={pilotSkill}
+          currentPoint={currentCurvePoint}
+          mastery={mastery}
+          side={side}
+          onPilotSkillChange={onPilotSkillChange}
+        />
       )}
 
       <div className="combat-sources">
@@ -230,15 +249,109 @@ export function ShipCard({
   )
 }
 
+function PilotEfficiencyPanel({ color, curve, currentSkill, currentPoint, mastery, side, onPilotSkillChange }) {
+  const pivot = Number(mastery?.pivotSkill)
+  const demandPct = Number(mastery?.demandPct)
+  const sideLabel = side === 'a' ? 'Alfa' : 'Beta'
+  const chartMax = efficiencyChartMax(curve)
+  const yTicks = efficiencyChartTicks(chartMax)
+
+  return (
+    <section className="ship-mastery-panel" aria-label="Curva de eficiencia por habilidad">
+      <div className="ship-spec-title-row">
+        <div>
+          <h3 className="ship-spec-title">Curva por habilidad</h3>
+          <p className="ship-mastery-copy">
+            Cuanto partido puedes sacarle a esta nave segun tu nivel de pilotaje.
+          </p>
+        </div>
+        <div className="ship-mastery-badges">
+          {Number.isFinite(demandPct) ? <span className="ship-mastery-badge">Exigencia {demandPct}%</span> : null}
+          {Number.isFinite(pivot) ? <span className="ship-mastery-badge">Despega en {formatSkill(pivot)}</span> : null}
+        </div>
+      </div>
+
+      <div className="ship-mastery-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={curve} margin={{ top: 10, right: 8, bottom: 0, left: 4 }}>
+            <CartesianGrid stroke="var(--border-light)" strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="skill"
+              type="number"
+              domain={[0, 10]}
+              ticks={[0, 2, 4, 6, 8, 10]}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
+            />
+            <YAxis
+              domain={[0, chartMax]}
+              ticks={yTicks}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
+              width={42}
+            />
+            <Tooltip content={<PilotEfficiencyTooltip />} />
+            <Line
+              type="monotone"
+              dataKey="efficiencyPct"
+              stroke={color}
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={{ r: 5, fill: color, stroke: 'var(--bg-primary)', strokeWidth: 2 }}
+            />
+            {currentPoint ? (
+              <ReferenceDot
+                x={Number(currentSkill)}
+                y={Number(currentPoint.efficiencyPct)}
+                r={5}
+                fill={color}
+                stroke="var(--bg-primary)"
+                strokeWidth={2}
+              />
+            ) : null}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="ship-mastery-summary">
+        <span>Skill actual {formatSkill(currentSkill)}</span>
+        <span>{currentPoint ? `${currentPoint.efficiencyPct}% de partido` : '—'}</span>
+        <span>{currentPoint ? `Skill efectiva ${formatSkill(currentPoint.adjustedSkill)}` : '—'}</span>
+      </div>
+
+      <div className="ship-mastery-skill-control">
+        <div className="section-label">Nivel del piloto</div>
+        <div className="slider-row pilot-skill-row ship-card-skill-row">
+          <span className={`pilot-skill-label tag tag-${side === 'a' ? 'blue' : 'coral'}`}>{sideLabel}</span>
+          <input
+            type="range"
+            min={0}
+            max={10}
+            step={0.1}
+            value={currentSkill}
+            onChange={(e) => onPilotSkillChange?.(Number(e.target.value))}
+            aria-label={`Habilidad del piloto ${sideLabel}`}
+          />
+          <span className="slider-val">{formatSkill(currentSkill)}</span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function SpecSection({ title, subtitle, children }) {
   return (
-    <section className="ship-spec-section">
-      <div className="ship-spec-title-row">
-        <h3 className="ship-spec-title">{title}</h3>
-        {subtitle ? <span className="ship-spec-subtitle">{subtitle}</span> : null}
-      </div>
+    <details className="ship-spec-section">
+      <summary className="ship-spec-summary">
+        <div className="ship-spec-title-row">
+          <h3 className="ship-spec-title">{title}</h3>
+          {subtitle ? <span className="ship-spec-subtitle">{subtitle}</span> : null}
+        </div>
+      </summary>
       <div className="ship-spec-list">{children}</div>
-    </section>
+    </details>
   )
 }
 
@@ -269,6 +382,20 @@ function ValueTooltip({ value, tooltipTitle, tooltipLines }) {
         </span>
       ) : null}
     </span>
+  )
+}
+
+function PilotEfficiencyTooltip({ active, payload, label }) {
+  if (!active || !Array.isArray(payload) || payload.length === 0) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+
+  return (
+    <div className="ship-chart-tooltip">
+      <div className="ship-chart-tooltip-title">Skill {formatSkill(label)}</div>
+      <div className="ship-chart-tooltip-line">Partido potencial: {formatNumber(point.efficiencyPct)}%</div>
+      <div className="ship-chart-tooltip-line">Skill efectiva: {formatSkill(point.adjustedSkill)}</div>
+    </div>
   )
 }
 
@@ -352,4 +479,37 @@ function formatAngle(value) {
 function formatAcceleration(entry) {
   if (!entry || entry.base === null || entry.base === undefined) return '—'
   return `${formatNumber(entry.base)} (${formatNumber(entry.boosted)}) G`
+}
+
+function formatSkill(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return n.toLocaleString('es-ES', { maximumFractionDigits: 1 })
+}
+
+function closestCurvePoint(curve, skill) {
+  if (!Array.isArray(curve) || curve.length === 0) return null
+  const target = Number(skill)
+  if (!Number.isFinite(target)) return null
+
+  return curve.reduce((best, point) => {
+    if (!best) return point
+    return Math.abs(Number(point.skill) - target) < Math.abs(Number(best.skill) - target) ? point : best
+  }, null)
+}
+
+function efficiencyChartMax(curve) {
+  const maxValue = Array.isArray(curve)
+    ? curve.reduce((max, point) => Math.max(max, Number(point?.efficiencyPct) || 0), 0)
+    : 100
+
+  return Math.max(100, Math.ceil(maxValue / 10) * 10)
+}
+
+function efficiencyChartTicks(max) {
+  const ticks = [0, 25, 50, 75, 100]
+  for (let value = 125; value <= max; value += 25) {
+    ticks.push(value)
+  }
+  return ticks.filter((value) => value <= max)
 }
