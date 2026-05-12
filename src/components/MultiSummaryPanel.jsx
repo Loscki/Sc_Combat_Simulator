@@ -41,8 +41,25 @@ function SummaryShipColumn({ side, shipName, children }) {
   )
 }
 
+function formatAmmoSummary(avgRemaining, avgRemainingPct, totalRemaining) {
+  const avgAmmo = Math.max(0, Math.round(Number(avgRemaining) || 0))
+  const avgPct = Math.max(0, Math.round(Number(avgRemainingPct) || 0))
+  const totalAmmo = Math.max(0, Math.round(Number(totalRemaining) || 0))
+  return {
+    value: `${avgAmmo}`,
+    sub: `Media restante ${avgPct}% · total fin de tanda ${totalAmmo}`,
+  }
+}
+
 export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
   if (!summary) return null
+
+  const ammoA = summary.hasBallisticsA
+    ? formatAmmoSummary(summary.avgAmmoRemainingA, summary.avgAmmoRemainingPctA, summary.totalAmmoRemainingA)
+    : null
+  const ammoB = summary.hasBallisticsB
+    ? formatAmmoSummary(summary.avgAmmoRemainingB, summary.avgAmmoRemainingPctB, summary.totalAmmoRemainingB)
+    : null
 
   return (
     <div className="results-panel">
@@ -82,7 +99,12 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
             sub={`${Math.round((summary.winsA / summary.total) * 100)}% del total`}
           />
           <SummaryShipRow
-            label="Casco medio restante"
+            label="Body medio restante"
+            value={`${Math.round(summary.avgVitalPctA)}%`}
+            sub="Qué tan cerca estuvo de morir"
+          />
+          <SummaryShipRow
+            label="Hull medio restante"
             value={`${Math.round(summary.avgHullPctA)}%`}
             sub={`Hasta destrucción · HP+escudo: ${Math.round(summary.avgTotalHpPctA)}%`}
           />
@@ -95,6 +117,18 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
             value={`${Math.round(summary.avgFireUptimeA)}%`}
             sub={`Capacitor medio: ${Math.round(summary.avgWeaponCapA)}%`}
           />
+          {ammoA && (
+            <SummaryShipRow
+              label="Munición balística restante"
+              value={ammoA.value}
+              sub={ammoA.sub}
+            />
+          )}
+          <SummaryShipRow
+            label="Recargas de armas"
+            value={summary.totalReloadsA}
+            sub={`${(summary.totalReloadsA / summary.total).toFixed(1)} por combate`}
+          />
         </SummaryShipColumn>
 
         <SummaryShipColumn side="b" shipName={shipBName}>
@@ -104,7 +138,12 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
             sub={`${Math.round((summary.winsB / summary.total) * 100)}% del total`}
           />
           <SummaryShipRow
-            label="Casco medio restante"
+            label="Body medio restante"
+            value={`${Math.round(summary.avgVitalPctB)}%`}
+            sub="Qué tan cerca estuvo de morir"
+          />
+          <SummaryShipRow
+            label="Hull medio restante"
             value={`${Math.round(summary.avgHullPctB)}%`}
             sub={`Hasta destrucción · HP+escudo: ${Math.round(summary.avgTotalHpPctB)}%`}
           />
@@ -116,6 +155,18 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
             label="Ventana de fuego media"
             value={`${Math.round(summary.avgFireUptimeB)}%`}
             sub={`Capacitor medio: ${Math.round(summary.avgWeaponCapB)}%`}
+          />
+          {ammoB && (
+            <SummaryShipRow
+              label="Munición balística restante"
+              value={ammoB.value}
+              sub={ammoB.sub}
+            />
+          )}
+          <SummaryShipRow
+            label="Recargas de armas"
+            value={summary.totalReloadsB}
+            sub={`${(summary.totalReloadsB / summary.total).toFixed(1)} por combate`}
           />
         </SummaryShipColumn>
       </div>

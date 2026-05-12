@@ -125,6 +125,13 @@ Refinamiento posterior:
 - las secciones de atributos de la ficha (`Casco`, `Armamento`, `Blindaje`,
   `Vuelo`, `Aceleraciones`, `Calculo`) pasan a mostrarse como desplegables
   cerrados por defecto para reducir altura y ruido visual.
+- la zona de graficas del resultado pasa a formato ancho, una grafica por fila,
+  para aprovechar todo el espacio horizontal disponible y mejorar la lectura.
+- los tooltips de graficas se simplifican y pasan al mismo estilo compacto que
+  la curva de habilidad, evitando que tapen tanto el punto inspeccionado.
+- se ordena el espaciado principal de la UI con una escala consistente de
+  `2 / 4 / 8 / 16 / 32`, sustituyendo paddings y gaps intermedios para dar
+  mas ritmo visual y coherencia entre paneles.
 
 ### 2026-05-12 - La Arrow empieza a despegar a partir de skill 7
 
@@ -2090,6 +2097,90 @@ El cambio se hizo de extremo a extremo:
 Verificacion:
 - `npm run build` correcto.
 - El visualizador mostro `20.0 km` en `Rango de deteccion (base)`.
+
+### 2026-05-12 - Calibracion Arrow vs Gladius por nivel de piloto
+
+Objetivo:
+Hacer que la eficacia real de la Arrow en combate se parezca mas a la curva
+de maestria mostrada en UI frente a una Gladius con el mismo nivel de piloto.
+
+Archivo tocado:
+- `src/engine/combatEngine.js`
+
+Decision:
+Se recalibro `pilotExpressionRoll()` para las naves exigentes:
+- la ventana de "despegue" de la Arrow se concentra mejor alrededor de skill 6;
+- el crecimiento de skill 7 se suaviza un poco;
+- el tramo 7.5+ gana mas peso, para que skill 8 refleje mejor su techo.
+
+Verificacion:
+- Muestreo Arrow vs Gladius, `3 min`, mismas skills, `160` semillas:
+  - skill `6` -> Arrow gana `26.25%`
+  - skill `7` -> Arrow gana `54.37%`
+  - skill `8` -> Arrow gana `73.75%`
+- Esto deja el comportamiento muy cerca del objetivo de referencia:
+  `25% / 50% / 75%`.
+
+### 2026-05-12 - Resumen multiple con Body, balistica y recargas
+
+Objetivo:
+Hacer mas util el resumen agregado de multiples simulaciones, mostrando que tan
+cerca estuvo cada nave de morir y anadiendo estado final de balistica y
+recargas de armas.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/hooks/useSimulator.js`
+- `src/components/MultiSummaryPanel.jsx`
+
+Decision:
+- Se anadio `weaponReloads` a las stats del motor contando las veces que una
+  nave tuvo que cortar fuego para recuperar capacitor de armas.
+- El resumen agregado ahora incluye `Body medio restante` separado de `Hull`.
+- Si la nave lleva armas balisticas, el resumen muestra la municion balistica
+  media restante y el total acumulado al final de la tanda.
+- El resumen muestra tambien el total de recargas de armas y la media por
+  combate.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-12 - Datos de balistica y recargas en cada combate
+
+Objetivo:
+Mostrar tambien en la ficha de cada simulacion individual la municion
+balistica restante y las recargas de armas al terminar el combate.
+
+Archivo tocado:
+- `src/components/ResultsPanel.jsx`
+
+Decision:
+- Si la nave lleva balistica, la ficha ahora muestra la municion restante y su
+  porcentaje final.
+- Siempre se muestra el numero de recargas de armas durante ese combate.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-12 - Foto de nave en la ficha
+
+Objetivo:
+Mostrar una imagen de la nave seleccionada dentro de cada ficha para mejorar la
+identificacion visual de cada bando.
+
+Archivos tocados:
+- `src/components/ShipCard.jsx`
+- `src/index.css`
+
+Decision:
+- Se anadio una imagen hero debajo del nombre de la nave.
+- La URL se construye contra Star Citizen Wiki usando redireccion por nombre de
+  archivo y algunos overrides para modelos frecuentes.
+- Si alguna imagen no existe o falla, la ficha muestra un fallback limpio con
+  icono.
+
+Verificacion:
+- `npm run build` correcto.
 
 ## Notas para futuros modelos
 

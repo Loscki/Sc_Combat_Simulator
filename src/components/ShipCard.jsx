@@ -3,6 +3,7 @@
  * Ficha de combate centrada en datos reales de nave y metricas calculadas.
  */
 
+import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 export function ShipCard({
@@ -57,6 +58,8 @@ export function ShipCard({
         </div>
         <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{isA ? 'Alfa' : 'Beta'}</span>
       </div>
+
+      <ShipHeroImage ship={ship} color={color} />
 
       <div className="ship-select-row" aria-label={`Selector de nave ${isA ? 'Alfa' : 'Beta'}`}>
         <select
@@ -249,6 +252,33 @@ export function ShipCard({
   )
 }
 
+function ShipHeroImage({ ship, color }) {
+  const src = shipPhotoUrl(ship)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [src])
+
+  return (
+    <div className="ship-photo-frame">
+      {!failed && src ? (
+        <img
+          className="ship-photo"
+          src={src}
+          alt={ship?.name ? `Vista de ${ship.name}` : 'Vista de la nave'}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="ship-photo-fallback" aria-hidden="true">
+          <i className="ti ti-rocket" style={{ color }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PilotEfficiencyPanel({ color, curve, currentSkill, currentPoint, mastery, side, onPilotSkillChange }) {
   const pivot = Number(mastery?.pivotSkill)
   const demandPct = Number(mastery?.demandPct)
@@ -425,6 +455,39 @@ function sourceLabel(source) {
   if (source === 'mixed') return 'real + estimado'
   if (source === 'estimated') return 'estimado'
   return 'fallback mock'
+}
+
+const SHIP_IMAGE_FILE_OVERRIDES = {
+  aegs_gladius: 'Gladius in space - Isometric.jpg',
+  anvl_arrow: 'Arrow in space - Isometric.jpg',
+  mrai_guardian: 'Guardian in space - Front.jpg',
+  mrai_guardian_qi: 'Guardian QI in space - Front.jpg',
+  mrai_guardian_mx: 'Guardian MX in space - Isometric.jpg',
+  aegs_avenger_titan: 'Avenger Titan in space - Isometric.jpg',
+  aegs_avenger_stalker: 'Avenger Stalker in space - Isometric.jpg',
+  anvl_hornet_f7c: 'F7C Hornet Mk I in space - Isometric.jpg',
+  anvl_hornet_f7cm: 'F7C-M Super Hornet in space - Isometric.jpg',
+  anvl_hornet_f7cs: 'F7C-S Hornet Ghost in space - Isometric.jpg',
+  anvl_hornet_f7cr: 'F7C-R Hornet Tracker in space - Isometric.jpg',
+}
+
+function shipPhotoUrl(ship) {
+  const explicit = SHIP_IMAGE_FILE_OVERRIDES[ship?.id]
+  if (explicit) return mediaWikiRedirectFileUrl(explicit)
+
+  const rawName = String(ship?.name || '').trim()
+  if (!rawName) return null
+
+  const normalizedName = rawName
+    .replace(/\s+/g, ' ')
+    .replace(/[/:]/g, ' ')
+    .trim()
+
+  return mediaWikiRedirectFileUrl(`${normalizedName} in space - Isometric.jpg`)
+}
+
+function mediaWikiRedirectFileUrl(fileName) {
+  return `https://starcitizen.tools/Special:Redirect/file/${encodeURIComponent(fileName)}`
 }
 
 function joinParts(parts, separator = ' · ') {

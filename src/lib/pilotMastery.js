@@ -31,7 +31,8 @@ export function adjustPilotSkillForShip(ship, pilotSkill) {
     curvedDelta = lowReach + Math.pow(segment, 1.08) * (10 - pivot) * highScale
   }
 
-  return clamp(PILOT_SKILL_CENTER + curvedDelta + offset, 0, 10)
+  const unlockedSkill = PILOT_SKILL_CENTER + curvedDelta + offset + masteryUnlockBonus(ship, raw)
+  return clamp(unlockedSkill, 0, 10)
 }
 
 export function buildPilotEfficiencyCurve(ship, step = 0.1, maneuverabilityPct = null) {
@@ -69,6 +70,12 @@ function projectedShipUtilizationPct(ship, rawSkill, adjustedSkill, maneuverabil
   const basePct = clamp(baseUtilization + unlockBonus, 0, 1) * 100
   const ceilingSurplus = Math.max(0, clampPilotSkill(rawSkill) - pivot) * demand * demand * maneuverability * 5
   return Math.round(basePct + ceilingSurplus)
+}
+
+function masteryUnlockBonus(ship, rawSkill) {
+  void ship
+  void rawSkill
+  return 0
 }
 
 function round2(n) {

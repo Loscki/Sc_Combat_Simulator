@@ -40,12 +40,12 @@ const BODY_HP_OVERRIDES = {
 const PILOT_MASTERY_OVERRIDES = {
   anvl_arrow: {
     pilotDemandScore: 0.72,
-    pilotSkillOffset: -0.36,
+    pilotSkillOffset: -0.02,
     pilotSkillScale: 1.18,
-    pilotSkillPivot: 7,
-    pilotSkillScaleLow: 0.42,
-    pilotSkillScaleHigh: 1.56,
-    pilotSkillExponentLow: 1.7,
+    pilotSkillPivot: 7.1,
+    pilotSkillScaleLow: 0.86,
+    pilotSkillScaleHigh: 1.03,
+    pilotSkillExponentLow: 1.45,
   },
   aegs_gladius: {
     pilotDemandScore: 0.38,

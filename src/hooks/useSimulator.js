@@ -195,6 +195,8 @@ function buildSummary(runs) {
   const avgDuration = avg(runs.map(r => r.durationSec))
   const avgHullPctA = avg(runs.map(r => r.stats.a.hullPct))
   const avgHullPctB = avg(runs.map(r => r.stats.b.hullPct))
+  const avgVitalPctA = avg(runs.map(r => r.stats.a.vitalPct))
+  const avgVitalPctB = avg(runs.map(r => r.stats.b.vitalPct))
   const avgTotalHpPctA = avg(runs.map(r => r.stats.a.totalHpPct ?? totalHpPctForRun(r, 'a')))
   const avgTotalHpPctB = avg(runs.map(r => r.stats.b.totalHpPct ?? totalHpPctForRun(r, 'b')))
   const avgEffDpsA = avg(runs.map(r => r.stats.a.effectiveDps))
@@ -203,6 +205,16 @@ function buildSummary(runs) {
   const avgFireUptimeB = avg(runs.map(r => r.stats.b.fireUptimePct ?? 0))
   const avgWeaponCapA = avg(runs.map(r => r.stats.a.avgWeaponCapPct ?? 100))
   const avgWeaponCapB = avg(runs.map(r => r.stats.b.avgWeaponCapPct ?? 100))
+  const totalReloadsA = runs.reduce((sum, run) => sum + (Number(run.stats.a.weaponReloads) || 0), 0)
+  const totalReloadsB = runs.reduce((sum, run) => sum + (Number(run.stats.b.weaponReloads) || 0), 0)
+  const hasBallisticsA = runs.some((run) => (Number(run.stats.a.ballisticWeaponCount) || 0) > 0)
+  const hasBallisticsB = runs.some((run) => (Number(run.stats.b.ballisticWeaponCount) || 0) > 0)
+  const avgAmmoRemainingA = hasBallisticsA ? avg(runs.map((run) => Number(run.stats.a.ammoRemaining) || 0)) : null
+  const avgAmmoRemainingB = hasBallisticsB ? avg(runs.map((run) => Number(run.stats.b.ammoRemaining) || 0)) : null
+  const avgAmmoRemainingPctA = hasBallisticsA ? avg(runs.map((run) => Number(run.stats.a.ammoRemainingPct) || 0)) : null
+  const avgAmmoRemainingPctB = hasBallisticsB ? avg(runs.map((run) => Number(run.stats.b.ammoRemainingPct) || 0)) : null
+  const totalAmmoRemainingA = hasBallisticsA ? runs.reduce((sum, run) => sum + (Number(run.stats.a.ammoRemaining) || 0), 0) : null
+  const totalAmmoRemainingB = hasBallisticsB ? runs.reduce((sum, run) => sum + (Number(run.stats.b.ammoRemaining) || 0), 0) : null
 
   return {
     total,
@@ -212,6 +224,8 @@ function buildSummary(runs) {
     avgDuration,
     avgHullPctA,
     avgHullPctB,
+    avgVitalPctA,
+    avgVitalPctB,
     avgTotalHpPctA,
     avgTotalHpPctB,
     avgEffDpsA,
@@ -220,6 +234,16 @@ function buildSummary(runs) {
     avgFireUptimeB,
     avgWeaponCapA,
     avgWeaponCapB,
+    totalReloadsA,
+    totalReloadsB,
+    hasBallisticsA,
+    hasBallisticsB,
+    avgAmmoRemainingA,
+    avgAmmoRemainingB,
+    avgAmmoRemainingPctA,
+    avgAmmoRemainingPctB,
+    totalAmmoRemainingA,
+    totalAmmoRemainingB,
   }
 }
 

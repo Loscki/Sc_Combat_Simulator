@@ -105,6 +105,23 @@ function formatTotalDamage(stats) {
   }
 }
 
+function formatBallisticAmmo(stats) {
+  const remaining = Math.max(0, Math.round(Number(stats.ammoRemaining) || 0))
+  const pct = Math.max(0, Math.round(Number(stats.ammoRemainingPct) || 0))
+  return {
+    value: remaining,
+    sub: `${pct}% restante al final`,
+  }
+}
+
+function formatWeaponReloads(stats) {
+  const reloads = Math.max(0, Math.round(Number(stats.weaponReloads) || 0))
+  return {
+    value: reloads,
+    sub: reloads === 1 ? '1 recarga durante el combate' : `${reloads} recargas durante el combate`,
+  }
+}
+
 function lethalityScore(attackerStats, defenderStats) {
   if ((Number(defenderStats?.vitalPct) || 0) <= 0) {
     return { value: '100', sub: 'Body rival destruido' }
@@ -176,6 +193,10 @@ export function ResultsPanel({ result, onReset }) {
   const lethalityB = lethalityScore(stats.b, stats.a)
   const shieldBreaksA = formatShieldBreaks(stats.a)
   const shieldBreaksB = formatShieldBreaks(stats.b)
+  const ammoA = Number(stats.a.ballisticWeaponCount) > 0 ? formatBallisticAmmo(stats.a) : null
+  const ammoB = Number(stats.b.ballisticWeaponCount) > 0 ? formatBallisticAmmo(stats.b) : null
+  const reloadsA = formatWeaponReloads(stats.a)
+  const reloadsB = formatWeaponReloads(stats.b)
 
   return (
     <div className="results-panel">
@@ -250,6 +271,18 @@ export function ResultsPanel({ result, onReset }) {
             value={totalDamageA.value}
             sub={totalDamageA.sub}
           />
+          {ammoA && (
+            <ShipMetricRow
+              label="Munición balística restante"
+              value={ammoA.value}
+              sub={ammoA.sub}
+            />
+          )}
+          <ShipMetricRow
+            label="Recargas de armas"
+            value={reloadsA.value}
+            sub={reloadsA.sub}
+          />
           <ShipMetricRow
             label="Letalidad"
             value={lethalityA.value}
@@ -294,6 +327,18 @@ export function ResultsPanel({ result, onReset }) {
             value={totalDamageB.value}
             sub={totalDamageB.sub}
           />
+          {ammoB && (
+            <ShipMetricRow
+              label="Munición balística restante"
+              value={ammoB.value}
+              sub={ammoB.sub}
+            />
+          )}
+          <ShipMetricRow
+            label="Recargas de armas"
+            value={reloadsB.value}
+            sub={reloadsB.sub}
+          />
           <ShipMetricRow
             label="Letalidad"
             value={lethalityB.value}
@@ -303,7 +348,7 @@ export function ResultsPanel({ result, onReset }) {
       </div>
 
       <div className="result-actions">
-        <button onClick={onReset}>
+        <button className="result-floating-action" onClick={onReset}>
           <i className="ti ti-refresh" aria-hidden="true" /> Nueva simulación
         </button>
       </div>

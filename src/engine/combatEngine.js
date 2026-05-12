@@ -170,8 +170,10 @@ export function runSimulation({
 
   const rawSkillAUsed = isStatic ? PILOT_SKILL_CENTER : pilotSkillA
   const rawSkillBUsed = isStatic ? PILOT_SKILL_CENTER : pilotSkillB
-  const skillAUsed = isStatic ? PILOT_SKILL_CENTER : adjustPilotSkillForShip(shipA, rawSkillAUsed)
-  const skillBUsed = isStatic ? PILOT_SKILL_CENTER : adjustPilotSkillForShip(shipB, rawSkillBUsed)
+  const expressionA = isStatic ? 0 : pilotExpressionRoll(shipA, rawSkillAUsed, rng)
+  const expressionB = isStatic ? 0 : pilotExpressionRoll(shipB, rawSkillBUsed, rng)
+  const skillAUsed = isStatic ? PILOT_SKILL_CENTER : clamp(adjustPilotSkillForShip(shipA, rawSkillAUsed) + expressionA, 0, 10)
+  const skillBUsed = isStatic ? PILOT_SKILL_CENTER : clamp(adjustPilotSkillForShip(shipB, rawSkillBUsed) + expressionB, 0, 10)
   const accA = isStatic ? 1 : effectiveAccuracy(shipA, skillAUsed)
   const evaA = isStatic ? 0 : effectiveEvasion(shipA, skillAUsed)
   const accB = isStatic ? 1 : effectiveAccuracy(shipB, skillBUsed)
@@ -239,6 +241,7 @@ export function runSimulation({
   let totalVitalDmgA = 0, totalVitalDmgB = 0
   let ammoSpentA = 0, ammoSpentB = 0
   let ammoDryTicksA = 0, ammoDryTicksB = 0
+  let weaponReloadsA = 0, weaponReloadsB = 0
 
   // Snapshots para gráficas (1 punto por segundo)
   const series = {
@@ -412,6 +415,7 @@ export function runSimulation({
     totalHullDmgA += appliedA.hullDamage
     totalVitalDmgA += appliedA.vitalDamage
     ammoSpentA += fireA.ammoSpent
+    weaponReloadsA += fireA.reloads
 
     secHitsB += fireB.hits
     totalHitsB += fireB.hits
@@ -421,6 +425,7 @@ export function runSimulation({
     totalHullDmgB += appliedB.hullDamage
     totalVitalDmgB += appliedB.vitalDamage
     ammoSpentB += fireB.ammoSpent
+    weaponReloadsB += fireB.reloads
 
     // Regeneración de escudos
     regenShield(stateA, shipA)
@@ -600,6 +605,7 @@ export function runSimulation({
         ammoCapacity:    ammoCapacityA,
         ammoRemaining:   ammoRemainingA,
         ammoSpent:       ammoSpentA,
+        weaponReloads:   weaponReloadsA,
         ammoRemainingPct: ammoCapacityA > 0 ? Math.round((ammoRemainingA / ammoCapacityA) * 100) : null,
         ammoDryPct:      durationSec > 0 ? Math.round(((ammoDryTicksA * TICK_RATE) / durationSec) * 100) : 0,
       },
@@ -648,6 +654,7 @@ export function runSimulation({
         ammoCapacity:    ammoCapacityB,
         ammoRemaining:   ammoRemainingB,
         ammoSpent:       ammoSpentB,
+        weaponReloads:   weaponReloadsB,
         ammoRemainingPct: ammoCapacityB > 0 ? Math.round((ammoRemainingB / ammoCapacityB) * 100) : null,
         ammoDryPct:      durationSec > 0 ? Math.round(((ammoDryTicksB * TICK_RATE) / durationSec) * 100) : 0,
       },
@@ -683,6 +690,20 @@ function createRng(seed) {
 
 function randUniform(rand, min, max) {
   return min + (max - min) * rand()
+}
+
+function pilotExpressionRoll(ship, rawPilotSkill, rng) {
+  const demand = clamp(0, ((Number(ship?.pilotDemandScore) || 0) - 0.45) / 0.35, 1)
+  const raw = clampPilotSkill(rawPilotSkill)
+  if (demand <= 0 || raw < 6) return 0
+
+  const emergenceWindow = clamp(0, 1 - Math.abs(raw - 6.2) / 0.8, 1)
+  const lateMasteryLift = Math.max(0, raw - 7.5)
+  const chance = clamp(0, (raw - 5) * 0.14 * demand + (raw - 6) * 0.08 + emergenceWindow * demand * 0.24 + lateMasteryLift * 0.14, 0.6)
+  if (rng() > chance) return 0
+
+  const amplitude = 0.52 + Math.max(0, raw - 6) * 0.12 + lateMasteryLift * 0.08
+  return amplitude * (0.85 + rng() * 0.3)
 }
 
 function dmgVarianceForPilot(pilotSkill) {
@@ -915,23 +936,23 @@ function resolveWeaponFire(state, profile, wantsFire, fireControl, hitChance, va
         }
 
         const capCost = weaponCapCost(group, profile)
-        if (capCost > 0 && state.capHold) {
-          capStarved = true
-          blockedByCapacitor = true
-          break
-        }
+          if (capCost > 0 && state.capHold) {
+            capStarved = true
+            blockedByCapacitor = true
+            break
+          }
 
-        if (state.weaponCap < capCost) {
-          state.capHold = true
-          capStarved = true
-          blockedByCapacitor = true
-          break
-        }
+          if (state.weaponCap < capCost) {
+            engageCapHold(state, result)
+            capStarved = true
+            blockedByCapacitor = true
+            break
+          }
 
         state.weaponCap = Math.max(0, state.weaponCap - capCost)
         if (capCost > 0) {
           energyShotFired = true
-          if (state.weaponCap < capCost) state.capHold = true
+          if (state.weaponCap < capCost) engageCapHold(state, result)
         }
         if (Number.isFinite(state.weaponAmmo[i])) {
           state.weaponAmmo[i] = Math.max(0, state.weaponAmmo[i] - 1)
@@ -976,7 +997,14 @@ function resolveWeaponFire(state, profile, wantsFire, fireControl, hitChance, va
 }
 
 function emptyFireResult(capStarved = false) {
-  return { shots: 0, hits: 0, rawDamage: 0, impacts: [], ammoSpent: 0, ammoDry: false, capStarved }
+  return { shots: 0, hits: 0, rawDamage: 0, impacts: [], ammoSpent: 0, ammoDry: false, reloads: 0, capStarved }
+}
+
+function engageCapHold(state, result) {
+  if (!state.capHold) {
+    state.capHold = true
+    result.reloads++
+  }
 }
 
 function ensureWeaponChargeSlots(state, groups) {
