@@ -59,6 +59,254 @@ No borrar entradas antiguas: este archivo es memoria historica del proyecto.
 
 ## Historial
 
+### 2026-05-12 - La habilidad del piloto pesa mas contra blancos grandes
+
+Objetivo:
+Corregir un sesgo del modelo dinamico: una Arrow o Gladius con piloto muy
+superior (`skill 8-10`) seguia sin poder cerrar el combate contra una Guardian
+con piloto medio (`skill 5`), incluso cuando la diferencia de pilotaje ya le
+permitia sobrevivir y romper escudos.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+
+Decision:
+Se refuerza el impacto ofensivo de la habilidad en dos puntos:
+
+1. `weaponTrackingVsTargetFactor()` ahora tambien considera la habilidad del
+   atacante. Un piloto bueno aprovecha mejor armas rapidas y consistentes,
+   especialmente cuando el blanco es grande y poco agil.
+
+2. `directVitalHitShare()` gana una dependencia mas fuerte de:
+   - ventaja de skill atacante vs defensor;
+   - tamano del `Body`;
+   - estabilidad/agilidad real del blanco.
+
+Esto hace que un piloto muy bueno no solo esquive mejor, sino que convierta una
+mayor parte de su dano de casco en castigo real al componente vital cuando pelea
+contra una nave mas torpe y con un `Body` grande.
+
+Verificacion:
+- Arrow vs Guardian, 3 min, seed `42`:
+  - `5 vs 5`: Guardian gana por tiempo; Arrow termina tocada y la Guardian con
+    `71%` de `Body`.
+  - `8 vs 5`: Arrow destruye a la Guardian en `160.3s`.
+  - `9 vs 5`: Arrow destruye a la Guardian en `130.1s`.
+  - `10 vs 5`: Arrow destruye a la Guardian en `110.6s`.
+- Gladius vs Guardian, 3 min, seed `42`:
+  - `8 vs 5`: Gladius destruye a la Guardian en `147.2s`.
+- Arrow vs Gladius se mantiene razonable:
+  - `5 vs 5` sigue sin destruccion asegurada en 3 min;
+  - `8 vs 5` ya resuelve a favor de la Arrow en `135.7s`.
+
+Riesgos / siguientes pasos:
+- El ajuste refuerza bastante el castigo al `Body` de naves grandes con baja
+  maniobrabilidad. Conviene observar si el salto entre `7` y `8` queda demasiado
+  brusco en otros matchups.
+- El siguiente refinamiento natural es convertir parte de esta ventaja de skill
+  en mejor control posicional/rango, para que no todo el peso extra recaiga en
+  la punteria al componente vital.
+
+### 2026-05-12 - Recalibracion del dano interno con modo estatico
+
+Objetivo:
+Corregir un desfase importante detectado en el banco de pruebas estatico:
+una Gladius no lograba destruir a una Guardian ni tras 10 minutos de impactos
+perfectos y continuos, lo que indicaba que el motor estaba atenuando demasiado
+el dano base de las armas reales.
+
+Archivos tocados:
+- `src/data/weapons.js`
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+
+Decision:
+Se separan dos escalas que antes estaban mezcladas:
+- `WEAPON_DPS_TO_SIM_SCALE = 0.14` se conserva para heuristicas y referencias
+  resumidas de nave;
+- `WEAPON_DAMAGE_TO_SIM_SCALE = 0.26` pasa a gobernar el dano real que usan
+  `simAlpha` y `simBurstDps` dentro del motor.
+
+Ademas, la metrica `theoreticalDps` deja de depender de `ship.dps` y pasa a
+salir directamente de la suma de `simBurstDps` de los grupos de armas activos,
+para que la UI no muestre un teorico desalineado con la simulacion.
+
+Tras revisar la logica de destruccion, el motor deja de asumir que todo el
+`hullHp` agregado es "zona de muerte". Cuando hay dato fiable o verificado, se
+usa el `Body` de la nave como componente vital real; mientras tanto se mantiene
+un fallback derivado para no bloquear el resto del catalogo.
+
+Verificacion:
+- Antes del cambio, Gladius -> Guardian, modo estatico, 600 m, solo Alfa:
+  - tras 10 min la Guardian seguia con `35270 HP` de casco (`51%`).
+- Despues del cambio:
+  - Gladius -> Guardian, mismo escenario: destruccion completa antes del limite;
+  - Arrow vs Gladius, 3 min, skill 5 vs 5, seed 42:
+    - el combate ya entra en ventana de destruccion alrededor de `2.4-2.5 min`,
+      mas cerca del comportamiento esperado por experiencia de juego.
+
+Riesgos / siguientes pasos:
+- La letalidad ya esta mucho mejor alineada en estatico, pero conviene seguir
+  observando combates dinamicos para no pasarnos en naves grandes con burst muy
+  alto.
+- El siguiente refinamiento natural es revisar si la condicion de destruccion
+  deberia apoyarse en un "vital/body HP" cuando esa fuente exista.
+
+### 2026-05-12 - Visualizacion explicita del Body en graficas
+
+Objetivo:
+Hacer visible que la destruccion ya depende del `Body` y no solo del casco
+agregado, porque la grafica de casco + escudos podia llevar a pensar que una
+nave seguia necesitando perder todo su `hullHp` total para morir.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/Charts.jsx`
+
+Decision:
+Se anaden snapshots por segundo del `Body` restante de cada nave (`aVital`,
+`bVital`) y una grafica nueva `Body en el tiempo`.
+Ademas, la grafica anterior se renombra a `Casco agregado + escudos` para
+distinguirla del componente vital.
+
+Verificacion:
+- El resultado expone ahora una serie temporal especifica para el `Body`.
+- La nueva grafica permite comprobar visualmente que cuando el `Body` llega a
+  `0`, la nave es destruida.
+
+### 2026-05-12 - Impacto directo al Body dependiente de skill y tamano
+
+Objetivo:
+Corregir un comportamiento irreal detectado en la nueva grafica del `Body`: en
+Guardian, el `Body` no empezaba a bajar hasta que el casco agregado quedaba
+reducido a ese mismo valor, como si todos los impactos hull fueran primero a
+componentes no vitales.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+
+Decision:
+Se corrige el calculo de impacto directo al `Body` y se hace depender de:
+- habilidad del atacante;
+- exposicion base del `Body`;
+- tamano absoluto del `Body`;
+- penetracion efectiva del arma.
+
+Con ello:
+- pilotos mas habilidosos convierten una mayor fraccion del dano de casco en
+  dano directo al `Body`;
+- naves con `Body` mas grande reciben impactos directos con algo mas de
+  frecuencia;
+- un piloto intermedio (`skill 5`) ya no se comporta como un tirador perfecto.
+
+Verificacion:
+- Antes del ajuste, Gladius -> Guardian estatico:
+  - el `Body` no bajaba hasta ~`519s`;
+  - `vitalDmgDealt` seguia en `0` hasta vaciar casi todo el casco no vital.
+- Despues del ajuste:
+  - el `Body` empieza a bajar desde el primer segundo registrado;
+  - Gladius -> Guardian estatico destruye en `303.2s`, en lugar de `590.4s`;
+  - Arrow vs Gladius dinamico, skill `5 vs 5`, seed `42`:
+    - sigue resolviendose en `146s`;
+  - Arrow vs Gladius dinamico, skill `2 vs 2`, seed `42`:
+    - ya no destruye en 3 min y ambos conservan bastante mas `Body`.
+
+### 2026-05-12 - Tracking convertido en modulador de ventana de fuego
+
+Objetivo:
+Revisar por que el combate dinamico Arrow vs Gladius era demasiado poco letal
+aunque el modo estatico demostraba que el dano base si podia destruir una nave
+en torno a 100-120 segundos.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+
+Decision:
+El problema principal no era el cierre inicial ni el capacitor. El bloqueo venia
+de usar el tracking como puerta binaria:
+- si `tracking < threshold`, la nave no disparaba nada ese tick.
+
+Eso hacia que pilotos de nivel medio pasaran demasiado tiempo sin aprovechar la
+ventana de tiro, especialmente contra naves evasivas.
+
+Se cambia el modelo:
+- el tracking ya no decide `dispara / no dispara`;
+- ahora modula cuanta parte de la ventana de fuego convierte el piloto en fuego
+  real (`firingWindowFactor`);
+- el nivel del piloto sigue importando incluso si ambos tienen el mismo skill:
+  un piloto 5 no capitaliza la ventana como uno 10;
+- en modo estatico este factor se fuerza a `1`.
+
+Tambien se anade un control por alcance real de cada grupo de armas dentro de
+`resolveWeaponFire()`.
+
+Verificacion:
+- Antes del cambio, Arrow vs Gladius, 3 min, skill 5 vs 5, seed 42:
+  - Arrow `37%` de uptime;
+  - Gladius `10%` de uptime;
+  - resultado final: `99%` y `96%` de casco.
+- Despues del cambio:
+  - ambos suben a ~`95%` de uptime;
+  - Arrow queda en torno a `64-67%` de casco;
+  - Gladius queda en torno a `94%` de casco y `5-8%` de escudo en seeds 42-46.
+- Escala de skill verificada:
+  - skill 2: menos dano y menos uptime que skill 5;
+  - skill 10: mas dano que skill 5, no se comporta igual.
+
+Resultado:
+El cuello principal de letalidad ya no es el gate binario de tracking.
+El siguiente cuello visible pasa a ser la letalidad por impacto del modelo
+dinamico: precision real, mitigacion y conversion de DPS a dano efectivo.
+
+### 2026-05-12 - Nuevo modo de combate estático para depuración
+
+Objetivo:
+Crear un modo de prueba sin maniobra ni fallo para aislar si los problemas de
+realismo vienen de tracking, rangos, detección o del modelo base de daño,
+escudos, capacitor y casco.
+
+Archivos tocados:
+- `src/components/SimControls.jsx`
+- `src/hooks/useSimulator.js`
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+
+Decision:
+Se elimina de la UI el botón `Hasta la muerte` y se sustituye por
+`Combate estático`.
+
+En este modo:
+- las naves quedan frente a frente a distancia fija;
+- no hay detección, cierre, merge ni maniobra;
+- no hay jitter ni fallos: si un arma puede disparar, impacta;
+- la duración usa el mismo control temporal que `Duración fija`;
+- se puede elegir quién dispara con dos checks:
+  - Alfa;
+  - Beta;
+  - ambos checks activos = ambos disparan.
+
+Además:
+- las simulaciones múltiples y el rango aleatorio se ignoran en este modo;
+- cada grupo de armas respeta ahora su `rangeM` real antes de disparar;
+- el panel de resultados cambia `Merges` por una etiqueta de prueba estática y
+  reemplaza `Detección` por `Posición`.
+
+Verificacion:
+- UI validada con:
+  - pestaña `Combate estático`;
+  - bloque `Banco de pruebas estático`;
+  - checks `Dispara Alfa` y `Dispara Beta`.
+- Arrow vs Gladius, estático, 800 m:
+  - ambos disparan: victoria Gladius en `101.9s`;
+  - solo dispara Alfa: victoria Arrow en `123.1s`;
+  - solo dispara Beta: victoria Gladius en `101.9s`.
+- Arrow vs Gladius, modo normal, 3 min, seed 42:
+  - sigue siendo poco realista: termina el tiempo con `99%` y `96%` de casco.
+
+Resultado:
+El nuevo modo deja claro que el problema fuerte de realismo no está en el daño
+base puro, sino en la lógica del combate dinámico.
+
 ### 2026-05-12 - Blindaje de UI cambiado a casco efectivo
 
 Objetivo:
