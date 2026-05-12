@@ -101,8 +101,16 @@ function formatComponentLoadout(ship) {
   return components.map(component => `${component.label}: ${component.name}`).join(' · ')
 }
 
+function staticFireLabel(staticFire) {
+  if (staticFire?.a && staticFire?.b) return 'Ambos disparan'
+  if (staticFire?.a) return 'Solo Alfa'
+  if (staticFire?.b) return 'Solo Beta'
+  return 'Sin disparos'
+}
+
 export function ResultsPanel({ result, onReset }) {
-  const { winner, durationSec, stats, shipA, shipB, mergeCount, initialRangeMUsed, detection } = result
+  const { winner, durationSec, stats, shipA, shipB, mergeCount, initialRangeMUsed, detection, mode, staticFire } = result
+  const isStatic = mode === 'static'
   const tagA = getTag(winner, 'a')
   const tagB = getTag(winner, 'b')
 
@@ -147,9 +155,9 @@ export function ResultsPanel({ result, onReset }) {
           sub="Inicio del combate"
         />
         <MetricCard
-          label="Merges"
-          value={mergeCount ?? 0}
-          sub="Cruces a 600m"
+          label={isStatic ? 'Prueba' : 'Merges'}
+          value={isStatic ? staticFireLabel(staticFire) : (mergeCount ?? 0)}
+          sub={isStatic ? 'Rango fijo · sin fallos' : 'Cruces a 600m'}
         />
       </div>
 
@@ -157,9 +165,9 @@ export function ResultsPanel({ result, onReset }) {
       <div className="ship-metrics-grid">
         <ShipMetricColumn side="a" ship={shipA} tag={tagA}>
           <ShipMetricRow
-            label="Detección"
-            value={`${((detection?.a?.rangeM ?? 0) / 1000).toFixed(1)} km`}
-            sub="Rango efectivo"
+            label={isStatic ? 'Posición' : 'Detección'}
+            value={isStatic ? `${(Number(initialRangeMUsed || 0) / 1000).toFixed(1)} km` : `${((detection?.a?.rangeM ?? 0) / 1000).toFixed(1)} km`}
+            sub={isStatic ? 'Frente a frente · solución de tiro perfecta' : 'Rango efectivo'}
           />
           <ShipMetricRow
             label="Armas"
@@ -225,9 +233,9 @@ export function ResultsPanel({ result, onReset }) {
 
         <ShipMetricColumn side="b" ship={shipB} tag={tagB}>
           <ShipMetricRow
-            label="Detección"
-            value={`${((detection?.b?.rangeM ?? 0) / 1000).toFixed(1)} km`}
-            sub="Rango efectivo"
+            label={isStatic ? 'Posición' : 'Detección'}
+            value={isStatic ? `${(Number(initialRangeMUsed || 0) / 1000).toFixed(1)} km` : `${((detection?.b?.rangeM ?? 0) / 1000).toFixed(1)} km`}
+            sub={isStatic ? 'Frente a frente · solución de tiro perfecta' : 'Rango efectivo'}
           />
           <ShipMetricRow
             label="Armas"

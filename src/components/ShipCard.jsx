@@ -128,6 +128,7 @@ export function ShipCard({
           <SpecRow label="Dimensiones" value={hull.dimensionsLabel ?? '—'} />
           <SpecRow label="Masa" value={hull.massKg ? `${formatNumber(hull.massKg)} kg` : '—'} />
           <SpecRow label="HP total" value={hull.totalHealthHp ? `${formatNumber(hull.totalHealthHp)} HP` : '—'} />
+          <SpecRow label="Body" value={hull.bodyHp ? `${formatNumber(hull.bodyHp)} HP` : '—'} />
         </SpecSection>
 
         <SpecSection title="Armamento">

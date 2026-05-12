@@ -26,7 +26,15 @@ import {
   componentLabel,
   componentOptionsForSlot,
 } from './components.js'
-import { WEAPON_CATALOG, WEAPON_DPS_TO_SIM_SCALE, calibratedWeaponDps, weaponMount } from './weapons.js'
+import { WEAPON_CATALOG, WEAPON_DAMAGE_TO_SIM_SCALE, WEAPON_DPS_TO_SIM_SCALE, calibratedWeaponDps, weaponMount } from './weapons.js'
+
+const BODY_HP_OVERRIDES = {
+  anvl_arrow: 1950,
+  aegs_gladius: 2350,
+  mrai_guardian: 7100,
+  mrai_guardian_qi: 7100,
+  mrai_guardian_mx: 7100,
+}
 
 const BASE_SHIPS = {
 
@@ -487,6 +495,8 @@ function withRealVehicleDefaults(ship) {
     shieldResistance: vehicle.shieldResistance,
     shieldAbsorption: vehicle.shieldAbsorption,
     shieldFaceType: vehicle.shieldFaceType,
+    vitalHullMax: bodyHullHpForShip(ship.id, vehicle, ship.hullMax),
+    vitalTargetChance: derivedVitalTargetChance(vehicle),
     realVehicle: vehicle,
     shipDataSource: 'real',
     shipDataVersion: vehicle.sourceVersion ?? VEHICLE_DATA_META.gameVersion,
@@ -551,6 +561,50 @@ function normalizeSignature(value, baseline) {
 function finiteRounded(value, fallback) {
   const n = Number(value)
   return Number.isFinite(n) ? round1(n) : fallback
+}
+
+function bodyHullHpForShip(shipId, vehicle, fallbackHullMax = 0) {
+  const override = Number(BODY_HP_OVERRIDES[shipId])
+  if (Number.isFinite(override) && override > 0) return override
+  return derivedVitalHullHp(vehicle, fallbackHullMax)
+}
+
+function derivedVitalHullHp(vehicle, fallbackHullMax = 0) {
+  const hullHp = Number(vehicle?.hullHp) || Number(fallbackHullMax) || 0
+  if (hullHp <= 0) return null
+
+  const armorHp = Number(vehicle?.armor?.health) || 0
+  const sizeClass = Number(vehicle?.sizeClass) || 2
+  const volume = vehicleVolume({ dimensions: vehicle?.dimensions })
+  const volumeFactor = normalizedLogFactor(volume, 700, 9000)
+
+  if (armorHp > 0) {
+    const armorFactor = 0.53 + sizeClass * 0.015 + volumeFactor * 0.03
+    return Math.round(clamp(hullHp * 0.18, armorHp * armorFactor, hullHp * 0.42))
+  }
+
+  const fallbackFactor = 0.24 + sizeClass * 0.04 + volumeFactor * 0.05
+  return Math.round(clamp(hullHp * 0.18, hullHp * fallbackFactor, hullHp * 0.42))
+}
+
+function derivedVitalTargetChance(vehicle) {
+  const sizeClass = Number(vehicle?.sizeClass) || 2
+  const dimensions = vehicle?.dimensions ?? {}
+  const planformArea = Math.max(1, (Number(dimensions.length) || 20) * (Number(dimensions.width) || 15))
+  const crossSection = Number(vehicle?.crossSection?.max) || 0
+  const areaFactor = normalizedLogFactor(planformArea, 180, 900)
+  const crossSectionFactor = normalizedLogFactor(crossSection, 150, 3500)
+  return round3(clamp(0.14, 0.14 + sizeClass * 0.015 + areaFactor * 0.11 + crossSectionFactor * 0.07, 0.36))
+}
+
+function normalizedLogFactor(value, min, max) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= min) return 0
+  const low = Math.log(Math.max(1, min))
+  const high = Math.log(Math.max(min + 1, max))
+  const current = Math.log(Math.max(1, n))
+  if (high <= low) return 0
+  return clamp(0, (current - low) / (high - low), 1)
 }
 
 function realRadarStrength(vehicle) {
@@ -1289,8 +1343,8 @@ function normalizeWeaponLoadout(ship) {
         count,
         mount: mount.mount ?? 'fixed',
         totalBurstDps: (Number(weapon.burstDps) || 0) * count,
-        simBurstDps: (Number(weapon.burstDps) || 0) * count * WEAPON_DPS_TO_SIM_SCALE,
-        simAlpha: (Number(weapon.alpha) || 0) * WEAPON_DPS_TO_SIM_SCALE,
+        simBurstDps: (Number(weapon.burstDps) || 0) * count * WEAPON_DAMAGE_TO_SIM_SCALE,
+        simAlpha: (Number(weapon.alpha) || 0) * WEAPON_DAMAGE_TO_SIM_SCALE,
         damageProfile: normalizeDamageProfile(weapon),
       }
     })
@@ -1407,7 +1461,7 @@ function toWeaponFireGroup(weapon) {
   const rpm = Math.max(1, Number(weapon.rpm) || 60)
   const alpha = Math.max(0, Number(weapon.alpha) || 0)
   const burstDps = Math.max(0, Number(weapon.burstDps) || 0)
-  const simAlpha = Math.max(0, Number(weapon.simAlpha) || alpha * WEAPON_DPS_TO_SIM_SCALE)
+  const simAlpha = Math.max(0, Number(weapon.simAlpha) || alpha * WEAPON_DAMAGE_TO_SIM_SCALE)
   const capCost = weaponCapCostPerShot(weapon)
   const count = Math.max(1, Number(weapon.count) || 1)
   const ammoPerWeapon = Number(weapon.ammo)
@@ -1427,7 +1481,7 @@ function toWeaponFireGroup(weapon) {
     rawAlpha: round1(alpha),
     simAlpha: round2(simAlpha),
     rawBurstDps: round1(burstDps * count),
-    simBurstDps: round1(burstDps * count * WEAPON_DPS_TO_SIM_SCALE),
+    simBurstDps: round1(burstDps * count * WEAPON_DAMAGE_TO_SIM_SCALE),
     rangeM: Math.round(Number(weapon.range) || 0),
     projectileSpeed: Math.round(Number(weapon.speed) || 0),
     spreadMax: Number(weapon.spreadMax) || 0,
@@ -1694,6 +1748,7 @@ function withCombatMetrics(ship) {
         dimensionsLabel: dimensionLabelForShip(ship),
         massKg: Math.round(Number(ship.realVehicle?.mass?.hull) || Number(ship.realVehicle?.mass?.total) || 0),
         totalHealthHp: Math.round(Number(ship.hullMax) || 0),
+        bodyHp: Math.round(Number(ship.vitalHullMax) || 0),
       },
       weaponry,
       armor,
