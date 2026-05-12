@@ -1,5 +1,7 @@
 node_modules/
 dist/
+portable/
+SC-Combat-Simulator-portable-*.zip
 
 .DS_Store
 Thumbs.db
