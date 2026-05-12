@@ -32,6 +32,8 @@ No borrar entradas antiguas: este archivo es memoria historica del proyecto.
 - El motor exige una solucion de tracking/time-on-target antes de disparar.
 - La deteccion compara radar del atacante contra firma EM/IR/CS del objetivo.
 - El resultado expone disparos, impactos y porcentaje de acierto por nave.
+- La evasion real de una nave pondera giro, roll, boost, aceleracion, movimiento
+  lateral/vertical derivado, masa, volumen, firma y resistencia total.
 - El catalogo real de armas se genera desde Star Citizen Wiki API e incluye
   penetracion real para la mayoria de armas importadas.
 - La penetracion usa `thickness`, `baseDistance`, `nearRadius` y `farRadius`
@@ -46,6 +48,8 @@ No borrar entradas antiguas: este archivo es memoria historica del proyecto.
   muestra en la tarjeta de cada nave.
 - La planta de energia modifica el sostenimiento del capacitor de armas:
   capacidad, recarga y consumo efectivo.
+- El capacitor de armas usa `capacitorAmmo` como unidad de disparos disponibles
+  para armas de energia; el coste bruto de la API no se mezcla con esa escala.
 - Cada bando tiene un configurador propio de armas y componentes compatibles
   con la nave seleccionada.
 - Las armas se configuran por espacio individual de arma, no por grupo de
@@ -54,6 +58,510 @@ No borrar entradas antiguas: este archivo es memoria historica del proyecto.
   incluye escudos, plantas de energia, coolers y radares.
 
 ## Historial
+
+### 2026-05-12 - La habilidad del piloto pesa mas contra blancos grandes
+
+Objetivo:
+Corregir un sesgo del modelo dinamico: una Arrow o Gladius con piloto muy
+superior (`skill 8-10`) seguia sin poder cerrar el combate contra una Guardian
+con piloto medio (`skill 5`), incluso cuando la diferencia de pilotaje ya le
+permitia sobrevivir y romper escudos.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+
+Decision:
+Se refuerza el impacto ofensivo de la habilidad en dos puntos:
+
+1. `weaponTrackingVsTargetFactor()` ahora tambien considera la habilidad del
+   atacante. Un piloto bueno aprovecha mejor armas rapidas y consistentes,
+   especialmente cuando el blanco es grande y poco agil.
+
+2. `directVitalHitShare()` gana una dependencia mas fuerte de:
+   - ventaja de skill atacante vs defensor;
+   - tamano del `Body`;
+   - estabilidad/agilidad real del blanco.
+
+Esto hace que un piloto muy bueno no solo esquive mejor, sino que convierta una
+mayor parte de su dano de casco en castigo real al componente vital cuando pelea
+contra una nave mas torpe y con un `Body` grande.
+
+Verificacion:
+- Arrow vs Guardian, 3 min, seed `42`:
+  - `5 vs 5`: Guardian gana por tiempo; Arrow termina tocada y la Guardian con
+    `71%` de `Body`.
+  - `8 vs 5`: Arrow destruye a la Guardian en `160.3s`.
+  - `9 vs 5`: Arrow destruye a la Guardian en `130.1s`.
+  - `10 vs 5`: Arrow destruye a la Guardian en `110.6s`.
+- Gladius vs Guardian, 3 min, seed `42`:
+  - `8 vs 5`: Gladius destruye a la Guardian en `147.2s`.
+- Arrow vs Gladius se mantiene razonable:
+  - `5 vs 5` sigue sin destruccion asegurada en 3 min;
+  - `8 vs 5` ya resuelve a favor de la Arrow en `135.7s`.
+
+Riesgos / siguientes pasos:
+- El ajuste refuerza bastante el castigo al `Body` de naves grandes con baja
+  maniobrabilidad. Conviene observar si el salto entre `7` y `8` queda demasiado
+  brusco en otros matchups.
+- El siguiente refinamiento natural es convertir parte de esta ventaja de skill
+  en mejor control posicional/rango, para que no todo el peso extra recaiga en
+  la punteria al componente vital.
+
+### 2026-05-12 - Recalibracion del dano interno con modo estatico
+
+Objetivo:
+Corregir un desfase importante detectado en el banco de pruebas estatico:
+una Gladius no lograba destruir a una Guardian ni tras 10 minutos de impactos
+perfectos y continuos, lo que indicaba que el motor estaba atenuando demasiado
+el dano base de las armas reales.
+
+Archivos tocados:
+- `src/data/weapons.js`
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+
+Decision:
+Se separan dos escalas que antes estaban mezcladas:
+- `WEAPON_DPS_TO_SIM_SCALE = 0.14` se conserva para heuristicas y referencias
+  resumidas de nave;
+- `WEAPON_DAMAGE_TO_SIM_SCALE = 0.26` pasa a gobernar el dano real que usan
+  `simAlpha` y `simBurstDps` dentro del motor.
+
+Ademas, la metrica `theoreticalDps` deja de depender de `ship.dps` y pasa a
+salir directamente de la suma de `simBurstDps` de los grupos de armas activos,
+para que la UI no muestre un teorico desalineado con la simulacion.
+
+Tras revisar la logica de destruccion, el motor deja de asumir que todo el
+`hullHp` agregado es "zona de muerte". Cuando hay dato fiable o verificado, se
+usa el `Body` de la nave como componente vital real; mientras tanto se mantiene
+un fallback derivado para no bloquear el resto del catalogo.
+
+Verificacion:
+- Antes del cambio, Gladius -> Guardian, modo estatico, 600 m, solo Alfa:
+  - tras 10 min la Guardian seguia con `35270 HP` de casco (`51%`).
+- Despues del cambio:
+  - Gladius -> Guardian, mismo escenario: destruccion completa antes del limite;
+  - Arrow vs Gladius, 3 min, skill 5 vs 5, seed 42:
+    - el combate ya entra en ventana de destruccion alrededor de `2.4-2.5 min`,
+      mas cerca del comportamiento esperado por experiencia de juego.
+
+Riesgos / siguientes pasos:
+- La letalidad ya esta mucho mejor alineada en estatico, pero conviene seguir
+  observando combates dinamicos para no pasarnos en naves grandes con burst muy
+  alto.
+- El siguiente refinamiento natural es revisar si la condicion de destruccion
+  deberia apoyarse en un "vital/body HP" cuando esa fuente exista.
+
+### 2026-05-12 - Visualizacion explicita del Body en graficas
+
+Objetivo:
+Hacer visible que la destruccion ya depende del `Body` y no solo del casco
+agregado, porque la grafica de casco + escudos podia llevar a pensar que una
+nave seguia necesitando perder todo su `hullHp` total para morir.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/Charts.jsx`
+
+Decision:
+Se anaden snapshots por segundo del `Body` restante de cada nave (`aVital`,
+`bVital`) y una grafica nueva `Body en el tiempo`.
+Ademas, la grafica anterior se renombra a `Casco agregado + escudos` para
+distinguirla del componente vital.
+
+Verificacion:
+- El resultado expone ahora una serie temporal especifica para el `Body`.
+- La nueva grafica permite comprobar visualmente que cuando el `Body` llega a
+  `0`, la nave es destruida.
+
+### 2026-05-12 - Impacto directo al Body dependiente de skill y tamano
+
+Objetivo:
+Corregir un comportamiento irreal detectado en la nueva grafica del `Body`: en
+Guardian, el `Body` no empezaba a bajar hasta que el casco agregado quedaba
+reducido a ese mismo valor, como si todos los impactos hull fueran primero a
+componentes no vitales.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+
+Decision:
+Se corrige el calculo de impacto directo al `Body` y se hace depender de:
+- habilidad del atacante;
+- exposicion base del `Body`;
+- tamano absoluto del `Body`;
+- penetracion efectiva del arma.
+
+Con ello:
+- pilotos mas habilidosos convierten una mayor fraccion del dano de casco en
+  dano directo al `Body`;
+- naves con `Body` mas grande reciben impactos directos con algo mas de
+  frecuencia;
+- un piloto intermedio (`skill 5`) ya no se comporta como un tirador perfecto.
+
+Verificacion:
+- Antes del ajuste, Gladius -> Guardian estatico:
+  - el `Body` no bajaba hasta ~`519s`;
+  - `vitalDmgDealt` seguia en `0` hasta vaciar casi todo el casco no vital.
+- Despues del ajuste:
+  - el `Body` empieza a bajar desde el primer segundo registrado;
+  - Gladius -> Guardian estatico destruye en `303.2s`, en lugar de `590.4s`;
+  - Arrow vs Gladius dinamico, skill `5 vs 5`, seed `42`:
+    - sigue resolviendose en `146s`;
+  - Arrow vs Gladius dinamico, skill `2 vs 2`, seed `42`:
+    - ya no destruye en 3 min y ambos conservan bastante mas `Body`.
+
+### 2026-05-12 - Tracking convertido en modulador de ventana de fuego
+
+Objetivo:
+Revisar por que el combate dinamico Arrow vs Gladius era demasiado poco letal
+aunque el modo estatico demostraba que el dano base si podia destruir una nave
+en torno a 100-120 segundos.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+
+Decision:
+El problema principal no era el cierre inicial ni el capacitor. El bloqueo venia
+de usar el tracking como puerta binaria:
+- si `tracking < threshold`, la nave no disparaba nada ese tick.
+
+Eso hacia que pilotos de nivel medio pasaran demasiado tiempo sin aprovechar la
+ventana de tiro, especialmente contra naves evasivas.
+
+Se cambia el modelo:
+- el tracking ya no decide `dispara / no dispara`;
+- ahora modula cuanta parte de la ventana de fuego convierte el piloto en fuego
+  real (`firingWindowFactor`);
+- el nivel del piloto sigue importando incluso si ambos tienen el mismo skill:
+  un piloto 5 no capitaliza la ventana como uno 10;
+- en modo estatico este factor se fuerza a `1`.
+
+Tambien se anade un control por alcance real de cada grupo de armas dentro de
+`resolveWeaponFire()`.
+
+Verificacion:
+- Antes del cambio, Arrow vs Gladius, 3 min, skill 5 vs 5, seed 42:
+  - Arrow `37%` de uptime;
+  - Gladius `10%` de uptime;
+  - resultado final: `99%` y `96%` de casco.
+- Despues del cambio:
+  - ambos suben a ~`95%` de uptime;
+  - Arrow queda en torno a `64-67%` de casco;
+  - Gladius queda en torno a `94%` de casco y `5-8%` de escudo en seeds 42-46.
+- Escala de skill verificada:
+  - skill 2: menos dano y menos uptime que skill 5;
+  - skill 10: mas dano que skill 5, no se comporta igual.
+
+Resultado:
+El cuello principal de letalidad ya no es el gate binario de tracking.
+El siguiente cuello visible pasa a ser la letalidad por impacto del modelo
+dinamico: precision real, mitigacion y conversion de DPS a dano efectivo.
+
+### 2026-05-12 - Nuevo modo de combate estático para depuración
+
+Objetivo:
+Crear un modo de prueba sin maniobra ni fallo para aislar si los problemas de
+realismo vienen de tracking, rangos, detección o del modelo base de daño,
+escudos, capacitor y casco.
+
+Archivos tocados:
+- `src/components/SimControls.jsx`
+- `src/hooks/useSimulator.js`
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+
+Decision:
+Se elimina de la UI el botón `Hasta la muerte` y se sustituye por
+`Combate estático`.
+
+En este modo:
+- las naves quedan frente a frente a distancia fija;
+- no hay detección, cierre, merge ni maniobra;
+- no hay jitter ni fallos: si un arma puede disparar, impacta;
+- la duración usa el mismo control temporal que `Duración fija`;
+- se puede elegir quién dispara con dos checks:
+  - Alfa;
+  - Beta;
+  - ambos checks activos = ambos disparan.
+
+Además:
+- las simulaciones múltiples y el rango aleatorio se ignoran en este modo;
+- cada grupo de armas respeta ahora su `rangeM` real antes de disparar;
+- el panel de resultados cambia `Merges` por una etiqueta de prueba estática y
+  reemplaza `Detección` por `Posición`.
+
+Verificacion:
+- UI validada con:
+  - pestaña `Combate estático`;
+  - bloque `Banco de pruebas estático`;
+  - checks `Dispara Alfa` y `Dispara Beta`.
+- Arrow vs Gladius, estático, 800 m:
+  - ambos disparan: victoria Gladius en `101.9s`;
+  - solo dispara Alfa: victoria Arrow en `123.1s`;
+  - solo dispara Beta: victoria Gladius en `101.9s`.
+- Arrow vs Gladius, modo normal, 3 min, seed 42:
+  - sigue siendo poco realista: termina el tiempo con `99%` y `96%` de casco.
+
+Resultado:
+El nuevo modo deja claro que el problema fuerte de realismo no está en el daño
+base puro, sino en la lógica del combate dinámico.
+
+### 2026-05-12 - Blindaje de UI cambiado a casco efectivo
+
+Objetivo:
+Corregir una confusion en la ficha de nave: Arrow y Gladius mostraban el mismo
+`HP blindaje`, lo que llevaba a interpretar que ambas tenian el mismo blindaje.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/components/ShipCard.jsx`
+- `AI_CHANGELOG.md`
+
+Decision:
+La fuente real (`Star Citizen Wiki API`) expone `armor.health`, pero ese valor
+se repite entre varias naves pequenas y no sirve bien como comparativa visual
+de blindaje entre cascos distintos.
+
+La ficha deja de tratar ese valor como `HP blindaje` principal y pasa a mostrar
+`Casco efectivo`, derivado de:
+- `hullHp / damageMultiplier.physical`
+- `hullHp / damageMultiplier.energy`
+
+Se mantiene el `armor.health` original solo como referencia secundaria de la
+API dentro de la fila.
+
+Verificacion:
+- Arrow:
+  - `armor.health` API: `4125`
+  - casco efectivo: `11440` fisico / `14300` energia
+- Gladius:
+  - `armor.health` API: `4125`
+  - casco efectivo: `8147` fisico / `10183` energia
+
+Resultado:
+La UI ya no sugiere erroneamente que Arrow y Gladius tienen el mismo blindaje
+real en combate.
+
+### 2026-05-12 - Panel de combate alineado con metricas tipo SPViewer
+
+Objetivo:
+Sustituir la ficha antigua de cada nave por un panel centrado en metricas de
+combate equivalentes a las que el usuario espera ver en referencias tipo
+SPViewer, dejando fuera ruido como combustible o carga.
+
+Archivos tocados:
+- `src/components/ShipCard.jsx`
+- `src/data/ships.js`
+- `src/index.css`
+- `AI_CHANGELOG.md`
+
+Decision:
+La ficha ahora se organiza en seis bloques:
+- Casco;
+- Armamento;
+- Blindaje;
+- Vuelo;
+- Aceleraciones;
+- Calculo.
+
+Se muestran como datos principales:
+- dimensiones, masa y HP total;
+- Pilot DPS sostenido/burst, alpha, misiles, escudo y municion balistica;
+- HP de blindaje, modificadores de dano, durabilidad, firma, deflexion y
+  resistencia de penetracion disponible en la fuente actual;
+- SCM, NAV, boost, pitch/yaw/roll y valores boosted;
+- aceleraciones en G derivadas desde datos reales de maniobra cuando la fuente
+  no trae ese bloque directamente;
+- metricas propias del simulador: precision, evasion y maniobrabilidad.
+
+Fuentes y criterio:
+- casco, blindaje, escudos, firmas, masas, velocidades y weaponry base salen de
+  Star Citizen Wiki API cuando existen;
+- el DPS sostenido de armas se toma de `fixedWeapons.sustainedDps` del catalogo
+  real cuando hay coincidencia;
+- las aceleraciones `Main/Retro/Up/Down/Strafe` son una estimacion derivada de
+  `boostForward`, `boostBackward`, `zeroToScm`, `pitchBoosted`, `yawBoosted` y
+  scores de thrusters, porque la fuente actual no expone el bloque exacto en G;
+- la UI marca ahora `real + estimado` cuando una ficha mezcla datos reales con
+  metricas derivadas.
+
+Verificacion:
+- Gladius:
+  - `Pilot DPS 956 sust. / 1598 burst`;
+  - `Armor HP 4125`;
+  - `Damage Modifiers -25 / -40 / 0`;
+  - aceleraciones estimadas `13.6 / 4.1 / 10 / 5 / 10 G` base.
+- Guardian:
+  - `Pilot DPS 1858 sust. / 3073 burst`;
+  - `Armor HP 11250`;
+  - `SCM 213`, `Boost 465`;
+  - aceleraciones estimadas claramente por debajo de Gladius.
+- `npm run build` correcto.
+
+Riesgos / siguientes pasos:
+- El bloque de aceleraciones sigue siendo derivado, no nativo.
+- Hay diferencias entre esta fuente y algunas capturas externas de SPViewer;
+  antes de recalibrar la simulacion contra esos valores conviene confirmar la
+  fuente exacta de referencia o integrar esa fuente directamente.
+
+### 2026-05-12 - Boost y thrusters en evasion y ventana de disparo
+
+Objetivo:
+Incluir el boost de velocidad y la capacidad de movimiento lateral/vertical en
+el calculo de evasion y en la ventana de oportunidad de disparo.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+La API de naves no expone un componente de thrusters laterales separado, asi que
+se deriva un perfil de maniobra con proxies reales:
+- `boostForward`;
+- `boostBackward`;
+- `zeroToScm`;
+- `zeroToMax`;
+- `pitchBoosted` como capacidad vertical;
+- `yawBoosted` como capacidad horizontal/lateral;
+- `rollBoosted`.
+
+Este perfil genera:
+- `verticalThrusterScore`;
+- `lateralThrusterScore`;
+- `strafeThrusterScore`;
+- `boostThrusterScore`;
+- `thrusterScore`.
+
+Impacto en motor:
+- `realEvasion()` usa el perfil de thrusters ademas de masa, volumen y firma.
+- `trackingQuality()` usa el control de thrusters del atacante y la presion de
+  maniobra del defensor para decidir si hay solucion de tiro.
+- En merge, el boost/strafe del defensor estrecha la ventana de disparo si el
+  atacante no puede compensarlo.
+
+Verificacion:
+- Perfiles resultantes:
+  - Arrow: evasion `0.36`, strafe `0.87`, boost `0.80`;
+  - Gladius: evasion `0.32`, strafe `0.72`, boost `0.77`;
+  - Guardian: evasion `0.14`, strafe `0.30`, boost `0.41`.
+- Gladius vs Guardian, 6 minutos, 40 km iniciales, seed 42:
+  - Gladius abre fuego antes y sostiene mas ventana de disparo;
+  - Guardian baja mucho mas tarde el escudo de Gladius (`180.9s`);
+  - Guardian gana por destruccion a los `282.3s`, con escudo muy castigado.
+
+### 2026-05-12 - Recalibracion de evasion por masa e inercia
+
+Objetivo:
+Evitar que naves pesadas como la Guardian tengan una evasion demasiado cercana a
+cazas ligeros como la Gladius.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+La evasion ya no se calcula solo con pitch/yaw, velocidad SCM y firma CS. Ahora
+representa mejor la dificultad real de evitar impactos e incluye:
+- giro medio pitch/yaw;
+- roll;
+- aceleracion 0-SCM;
+- velocidad SCM;
+- masa total;
+- volumen aproximado;
+- HP total de casco + escudo;
+- firma CS.
+
+Impacto:
+- Arrow: `0.37`
+- Gladius: `0.33`
+- Hornet F7C Mk I: `0.23`
+- Guardian: `0.14`
+- Guardian QI: `0.14`
+
+Verificacion:
+- Gladius vs Guardian, 6 minutos, 40 km iniciales, seed 42:
+  - la Gladius sube de 51% a 61% de acierto contra Guardian;
+  - Guardian conserva su ventaja por escudos/casco/armas, no por esquiva;
+  - Guardian destruye la Gladius a los 187.6s.
+
+### 2026-05-12 - Correccion de dano efectivo y capacitor de armas
+
+Objetivo:
+Corregir un caso irrealista donde, en combates de varios minutos como Gladius vs
+Guardian, las naves no conseguian bajar escudos porque el capacitor de armas
+limitaba demasiado la cadencia real.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+Las armas de energia reales traen dos magnitudes distintas:
+- `capacitorAmmo`: cantidad de disparos que puede sostener el arma;
+- `capacitorCostPerShot`: coste bruto interno de la API.
+
+El motor estaba escalando la capacidad con `capacitorAmmo`, pero restaba el
+coste bruto por disparo. Eso hacia que armas como el M7A del Guardian vaciaran
+practicamente todo el capacitor en una sola salva.
+
+Ahora el coste de disparo se normaliza contra `capacitorAmmo`, y las armas
+balisticas quedan fuera del banco de capacitor de energia. Tambien pueden seguir
+disparando aunque el capacitor de energia este en espera de recarga.
+El dato visible de consumo por segundo se alinea con este consumo normalizado y
+ya no aplica un suelo artificial heredado del modelo anterior.
+
+Verificacion:
+- Gladius vs Guardian, 6 minutos, 40 km iniciales, seed 42:
+  - antes: Guardian no rompia el escudo de Gladius;
+  - despues: Guardian rompe el escudo de Gladius a los 140.9s y destruye la
+    nave a los 191.9s.
+- El Guardian pasa de coste M7A `31.61` por disparo a `1.00` en la escala del
+  capacitor simulado.
+- La Gladius conserva la Mantis balistica disparando sin depender del capacitor.
+
+### 2026-05-12 - Correccion de recarga de escudos
+
+Objetivo:
+Corregir la logica de regeneracion de escudos para que solo recarguen cuando la
+nave haya pasado el delay correcto sin recibir dano.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/data/ships.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+Se separan dos delays:
+- `shieldDamagedDelay`: delay normal tras recibir dano;
+- `shieldDownedDelay`: delay mas largo cuando el escudo llega a 0.
+
+El motor reinicia el temporizador de recarga con cualquier dano efectivo
+recibido, incluso cuando el escudo ya esta a 0 y el dano entra directamente al
+casco. Esto evita que un escudo destruido empiece a recargar bajo fuego
+continuo.
+
+Impacto en simulacion:
+- dano continuo mantiene el escudo sin regenerar;
+- al dejar de recibir dano, el escudo espera el delay correspondiente y luego
+  regenera;
+- los componentes de escudo reales aportan `damagedDelay` y `downedDelay`
+  cuando estan disponibles.
+
+Verificacion:
+- `npm run build` correcto.
+- Prueba controlada con dano continuo:
+  - escudo baja de 50 a 0;
+  - permanece a 0 durante todo el fuego continuo;
+  - 149 disparos, 573 dano a casco, sin regeneracion indebida.
+- Prueba controlada con un solo disparo:
+  - escudo baja de 50 a 25;
+  - no regenera durante 2s;
+  - despues empieza a recuperar: 25, 25, 34, 44, 50.
+- Gladius base conserva `shieldDamagedDelay = 5` y `shieldDownedDelay = 10`;
+  con FR-66 usa delays reales aproximados `4.8` y `9.6`.
 
 ### 2026-05-12 - Planta de energia afecta capacitor de armas
 

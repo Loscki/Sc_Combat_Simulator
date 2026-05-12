@@ -18,8 +18,10 @@ function buildTimeData(series) {
     t:       sec,
     aHull:   series.aHull[i],
     aShield: series.aShield[i],
+    aVital:  series.aVital?.[i],
     bHull:   series.bHull[i],
     bShield: series.bShield[i],
+    bVital:  series.bVital?.[i],
     aDmg:    series.aDmgCum[i],
     bDmg:    series.bDmgCum[i],
     rangeKm: series.rangeM?.[i] != null ? series.rangeM[i] / 1000 : null,
@@ -43,9 +45,9 @@ export function Charts({ result }) {
   return (
     <div className="charts-grid">
 
-      {/* HP + Escudos */}
+      {/* Casco agregado + escudos */}
       <div className="card">
-        <div className="section-label">HP + escudos en el tiempo</div>
+        <div className="section-label">Casco agregado + escudos</div>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={timeData}>
             <CartesianGrid {...GRID_STYLE} />
@@ -57,6 +59,22 @@ export function Charts({ result }) {
             <Line type="monotone" dataKey="aShield" name={`${shipA.name} escudo`}  stroke="#85B7EB" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
             <Line type="monotone" dataKey="bHull"   name={`${shipB.name} casco`}   stroke="#D85A30" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="bShield" name={`${shipB.name} escudo`}  stroke="#EF9F27" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Body */}
+      <div className="card">
+        <div className="section-label">Body en el tiempo</div>
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={timeData}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="t" tick={AXIS_STYLE} tickFormatter={v => v + 's'} interval={tickInterval} />
+            <YAxis tick={AXIS_STYLE} />
+            <Tooltip formatter={(v, name) => [v + ' HP', name]} labelFormatter={v => v + 's'} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Line type="monotone" dataKey="aVital" name={`${shipA.name} body`} stroke="#378ADD" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="bVital" name={`${shipB.name} body`} stroke="#D85A30" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>

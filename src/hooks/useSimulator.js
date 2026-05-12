@@ -17,7 +17,7 @@ const DEFAULT_CONFIG = {
   shipBLoadoutId: STOCK_LOADOUT_ID,
   shipACustomConfig: { weaponsBySlot: {}, components: {} },
   shipBCustomConfig: { weaponsBySlot: {}, components: {} },
-  mode:        'timed',    // 'timed' | 'death'
+  mode:        'timed',    // 'timed' | 'static' | 'death'
   durationMin: 3,          // minutos (modo timed)
   maxTimeMin:  5,          // minutos máximos (modo death)
   pilotSkillA: 5,          // 0–10, 5 = stats base de la nave
@@ -26,6 +26,8 @@ const DEFAULT_CONFIG = {
   simCount:    10,
   initialRangeKm: 1.5,
   randomRangePerSim: false,
+  staticFireA: true,
+  staticFireB: true,
 }
 
 export function useSimulator() {
@@ -109,13 +111,14 @@ export function useSimulator() {
         ...getShipForLoadout(config.shipBId, config.shipBLoadoutId, config.shipBCustomConfig),
       }
 
-      const count = config.multiSim ? Math.max(1, Math.min(200, Number(config.simCount) || 1)) : 1
+      const isStatic = config.mode === 'static'
+      const count = !isStatic && config.multiSim ? Math.max(1, Math.min(200, Number(config.simCount) || 1)) : 1
       const createdAt = Date.now()
 
       const nextRuns = Array.from({ length: count }).map((_, i) => {
         const seed = createdAt + i
         const baseRangeM = Math.max(300, (Number(config.initialRangeKm) || 1.5) * 1000)
-        const initialRangeM = config.randomRangePerSim
+        const initialRangeM = !isStatic && config.randomRangePerSim
           ? clampRangeM(baseRangeM * seededUniform(seed, 0.5, 1.5))
           : clampRangeM(baseRangeM)
         const outcome = runSimulation({
@@ -128,6 +131,8 @@ export function useSimulator() {
           pilotSkillB:  config.pilotSkillB,
           seed,
           initialRangeM,
+          staticFireA: Boolean(config.staticFireA),
+          staticFireB: Boolean(config.staticFireB),
         })
 
         return {

@@ -14,6 +14,8 @@ import { EventLog }       from './components/EventLog'
 import { SimRunsSidebar } from './components/SimRunsSidebar'
 import { MultiSummaryPanel } from './components/MultiSummaryPanel'
 import { ShotLog } from './components/ShotLog'
+import { VEHICLE_DATA_META } from './data/generated/vehicles.generated.js'
+import { WEAPON_SOURCE_META } from './data/weapons.js'
 
 const RUN_WINNER_LABEL = {
   a: 'Gana Alfa',
@@ -53,6 +55,9 @@ export default function App() {
     shipA, shipB,
     ships,
   } = useSimulator()
+
+  const dataSourceLabel = VEHICLE_DATA_META?.source ?? 'Star Citizen Wiki API'
+  const dataVersion = VEHICLE_DATA_META?.gameVersion ?? WEAPON_SOURCE_META?.gameVersion ?? null
 
   return (
     <div className={`app ${isMulti ? 'has-run-history' : ''}`}>
@@ -124,6 +129,12 @@ export default function App() {
           </div>
         </section>
       )}
+
+      <aside className="data-attribution" aria-label="Fuente de datos">
+        <span>Datos: {dataSourceLabel}</span>
+        {dataVersion ? <span>Versión: {dataVersion}</span> : null}
+        <span>Sin SPViewer</span>
+      </aside>
     </div>
   )
 }

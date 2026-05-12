@@ -26,7 +26,15 @@ import {
   componentLabel,
   componentOptionsForSlot,
 } from './components.js'
-import { WEAPON_CATALOG, WEAPON_DPS_TO_SIM_SCALE, calibratedWeaponDps, weaponMount } from './weapons.js'
+import { WEAPON_CATALOG, WEAPON_DAMAGE_TO_SIM_SCALE, WEAPON_DPS_TO_SIM_SCALE, calibratedWeaponDps, weaponMount } from './weapons.js'
+
+const BODY_HP_OVERRIDES = {
+  anvl_arrow: 1950,
+  aegs_gladius: 2350,
+  mrai_guardian: 7100,
+  mrai_guardian_qi: 7100,
+  mrai_guardian_mx: 7100,
+}
 
 const BASE_SHIPS = {
 
@@ -445,6 +453,7 @@ function withRealVehicleDefaults(ship) {
   const sigEM = normalizeSignature(vehicle.signature?.emShields ?? vehicle.emission?.emIdle, SIGNATURE_BASELINES.em)
   const sigIR = normalizeSignature(vehicle.signature?.irShields ?? vehicle.emission?.ir, SIGNATURE_BASELINES.ir)
   const sigCS = normalizeSignature(vehicle.crossSection?.max, SIGNATURE_BASELINES.cs)
+  const maneuverProfile = realManeuverProfile(vehicle)
 
   return {
     ...ship,
@@ -458,10 +467,21 @@ function withRealVehicleDefaults(ship) {
     hullMax: finiteRounded(vehicle.hullHp, ship.hullMax),
     shieldMax: finiteRounded(vehicle.shieldHp, ship.shieldMax),
     shieldRegen: finiteRounded(vehicle.shieldRegen, ship.shieldRegen),
+    shieldDamagedDelay: ship.shieldDamagedDelay ?? ship.shieldCooldown ?? 5,
+    shieldDownedDelay: ship.shieldDownedDelay ?? (ship.shieldCooldown ?? 5) * 2,
     speedSCM: finiteRounded(vehicle.speed?.scm, ship.speedSCM),
     speedBoost: finiteRounded(vehicle.speed?.max, ship.speedBoost),
     accuracy: realAccuracy(vehicle, hardpoints, ship.accuracy),
-    evasion: realEvasion(vehicle, sigCS, ship.evasion),
+    evasion: realEvasion(vehicle, sigCS, ship.evasion, maneuverProfile),
+    boostForward: maneuverProfile.boostForward,
+    boostBackward: maneuverProfile.boostBackward,
+    zeroToScm: maneuverProfile.zeroToScm,
+    zeroToMax: maneuverProfile.zeroToMax,
+    verticalThrusterScore: maneuverProfile.verticalThrusterScore,
+    lateralThrusterScore: maneuverProfile.lateralThrusterScore,
+    strafeThrusterScore: maneuverProfile.strafeThrusterScore,
+    boostThrusterScore: maneuverProfile.boostThrusterScore,
+    thrusterScore: maneuverProfile.thrusterScore,
     radarStrength: realRadarStrength(vehicle),
     sigEM,
     sigIR,
@@ -475,6 +495,8 @@ function withRealVehicleDefaults(ship) {
     shieldResistance: vehicle.shieldResistance,
     shieldAbsorption: vehicle.shieldAbsorption,
     shieldFaceType: vehicle.shieldFaceType,
+    vitalHullMax: bodyHullHpForShip(ship.id, vehicle, ship.hullMax),
+    vitalTargetChance: derivedVitalTargetChance(vehicle),
     realVehicle: vehicle,
     shipDataSource: 'real',
     shipDataVersion: vehicle.sourceVersion ?? VEHICLE_DATA_META.gameVersion,
@@ -541,6 +563,50 @@ function finiteRounded(value, fallback) {
   return Number.isFinite(n) ? round1(n) : fallback
 }
 
+function bodyHullHpForShip(shipId, vehicle, fallbackHullMax = 0) {
+  const override = Number(BODY_HP_OVERRIDES[shipId])
+  if (Number.isFinite(override) && override > 0) return override
+  return derivedVitalHullHp(vehicle, fallbackHullMax)
+}
+
+function derivedVitalHullHp(vehicle, fallbackHullMax = 0) {
+  const hullHp = Number(vehicle?.hullHp) || Number(fallbackHullMax) || 0
+  if (hullHp <= 0) return null
+
+  const armorHp = Number(vehicle?.armor?.health) || 0
+  const sizeClass = Number(vehicle?.sizeClass) || 2
+  const volume = vehicleVolume({ dimensions: vehicle?.dimensions })
+  const volumeFactor = normalizedLogFactor(volume, 700, 9000)
+
+  if (armorHp > 0) {
+    const armorFactor = 0.53 + sizeClass * 0.015 + volumeFactor * 0.03
+    return Math.round(clamp(hullHp * 0.18, armorHp * armorFactor, hullHp * 0.42))
+  }
+
+  const fallbackFactor = 0.24 + sizeClass * 0.04 + volumeFactor * 0.05
+  return Math.round(clamp(hullHp * 0.18, hullHp * fallbackFactor, hullHp * 0.42))
+}
+
+function derivedVitalTargetChance(vehicle) {
+  const sizeClass = Number(vehicle?.sizeClass) || 2
+  const dimensions = vehicle?.dimensions ?? {}
+  const planformArea = Math.max(1, (Number(dimensions.length) || 20) * (Number(dimensions.width) || 15))
+  const crossSection = Number(vehicle?.crossSection?.max) || 0
+  const areaFactor = normalizedLogFactor(planformArea, 180, 900)
+  const crossSectionFactor = normalizedLogFactor(crossSection, 150, 3500)
+  return round3(clamp(0.14, 0.14 + sizeClass * 0.015 + areaFactor * 0.11 + crossSectionFactor * 0.07, 0.36))
+}
+
+function normalizedLogFactor(value, min, max) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= min) return 0
+  const low = Math.log(Math.max(1, min))
+  const high = Math.log(Math.max(min + 1, max))
+  const current = Math.log(Math.max(1, n))
+  if (high <= low) return 0
+  return clamp(0, (current - low) / (high - low), 1)
+}
+
 function realRadarStrength(vehicle) {
   const radar = (vehicle.components ?? []).find(component => component.type === 'radar')
   const sizeClass = Number(vehicle.sizeClass) || 2
@@ -567,14 +633,97 @@ function realAccuracy(vehicle, hardpoints, fallback) {
   return round2(clamp(0.55, value, 0.82) || fallback)
 }
 
-function realEvasion(vehicle, sigCS, fallback) {
+function realEvasion(vehicle, sigCS, fallback, maneuverProfile = realManeuverProfile(vehicle)) {
   const pitch = Number(vehicle.agility?.pitch)
   const yaw = Number(vehicle.agility?.yaw)
   const scm = Number(vehicle.speed?.scm)
   const turn = Number.isFinite(pitch) && Number.isFinite(yaw) ? (pitch + yaw) / 2 : 50
   const speed = Number.isFinite(scm) ? scm : 220
-  const value = 0.12 + (turn / 80) * 0.16 + (speed / 300) * 0.10 - Math.max(0, sigCS - 0.8) * 0.05
-  return round2(clamp(0.18, value, 0.48) || fallback)
+  const totalMass = Number(vehicle.mass?.total) || Number(vehicle.mass?.hull) || 60000
+  const volume = vehicleVolume(vehicle)
+  const durability = (Number(vehicle.hullHp) || 0) + (Number(vehicle.shieldHp) || 0)
+
+  const turnScore = clamp(0, (turn - 28) / 42, 1)
+  const speedScore = clamp(0, (speed - 170) / 70, 1)
+  const massPenalty = logPenalty(totalMass, 55000, 150000, 0.055)
+  const volumePenalty = logPenalty(volume, 2100, 4100, 0.035)
+  const durabilityPenalty = logPenalty(durability, 14000, 85000, 0.055)
+  const signaturePenalty = clamp(0, (sigCS - 0.85) * 0.04, 0.05)
+
+  const value = 0.13
+    + turnScore * 0.09
+    + speedScore * 0.035
+    + maneuverProfile.strafeThrusterScore * 0.075
+    + maneuverProfile.boostThrusterScore * 0.035
+    + maneuverProfile.rollThrusterScore * 0.025
+    - massPenalty
+    - volumePenalty
+    - durabilityPenalty
+    - signaturePenalty
+
+  return round2(clamp(0.14, value, 0.48) || fallback)
+}
+
+function realManeuverProfile(vehicle) {
+  const speed = vehicle.speed ?? {}
+  const agility = vehicle.agility ?? {}
+  const boostForward = Number(speed.boostForward) || 0
+  const boostBackward = Number(speed.boostBackward) || 0
+  const zeroToScm = Number(speed.zeroToScm)
+  const zeroToMax = Number(speed.zeroToMax)
+  const pitchBoosted = Number(agility.pitchBoosted) || (Number(agility.pitch) || 50) * 1.2
+  const yawBoosted = Number(agility.yawBoosted) || (Number(agility.yaw) || 50) * 1.2
+  const rollBoosted = Number(agility.rollBoosted) || (Number(agility.roll) || 120) * 1.2
+  const accelScore = clamp(0, (5.5 - (Number.isFinite(zeroToScm) ? zeroToScm : 3.5)) / 4, 1)
+  const forwardBoostScore = clamp(0, (boostForward - 320) / 280, 1)
+  const brakeBoostScore = clamp(0, (boostBackward - 160) / 130, 1)
+  const verticalThrusterScore = clamp(0, (pitchBoosted - 45) / 45, 1)
+  const lateralThrusterScore = clamp(0, (yawBoosted - 38) / 42, 1)
+  const rollThrusterScore = clamp(0, (rollBoosted - 110) / 140, 1)
+  const strafeThrusterScore = clamp(
+    0,
+    lateralThrusterScore * 0.38 + verticalThrusterScore * 0.38 + brakeBoostScore * 0.14 + accelScore * 0.10,
+    1
+  )
+  const boostThrusterScore = clamp(
+    0,
+    forwardBoostScore * 0.45 + brakeBoostScore * 0.30 + accelScore * 0.25,
+    1
+  )
+  const thrusterScore = clamp(
+    0,
+    strafeThrusterScore * 0.58 + boostThrusterScore * 0.24 + rollThrusterScore * 0.18,
+    1
+  )
+
+  return {
+    boostForward: Math.round(boostForward),
+    boostBackward: Math.round(boostBackward),
+    zeroToScm: Number.isFinite(zeroToScm) ? round2(zeroToScm) : null,
+    zeroToMax: Number.isFinite(zeroToMax) ? round2(zeroToMax) : null,
+    verticalThrusterScore: round2(verticalThrusterScore),
+    lateralThrusterScore: round2(lateralThrusterScore),
+    rollThrusterScore: round2(rollThrusterScore),
+    strafeThrusterScore: round2(strafeThrusterScore),
+    boostThrusterScore: round2(boostThrusterScore),
+    thrusterScore: round2(thrusterScore),
+  }
+}
+
+function vehicleVolume(vehicle) {
+  const dimensions = vehicle.dimensions ?? {}
+  const length = Number(dimensions.length) || 20
+  const width = Number(dimensions.width) || 15
+  const height = Number(dimensions.height) || 6
+  return length * width * height
+}
+
+function logPenalty(value, neutral, heavy, maxPenalty) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= neutral) return 0
+  const denominator = Math.log(heavy / neutral)
+  if (!Number.isFinite(denominator) || denominator <= 0) return 0
+  return clamp(0, (Math.log(n / neutral) / denominator) * maxPenalty, maxPenalty)
 }
 
 function withWeaponDefaults(ship, selectedLoadoutId = STOCK_LOADOUT_ID, customConfig = null) {
@@ -799,7 +948,7 @@ export function getShipForLoadout(shipId, loadoutId = STOCK_LOADOUT_ID, customCo
   const baseShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(BASE_SHIPS[shipId] ?? BASE_SHIPS.aegs_gladius)))
   const componentShip = withComponentOverrides(baseShip, customConfig)
   const weaponShip = withWeaponDefaults(componentShip, loadoutId, customConfig)
-  const resolvedShip = withSensorDefaults(weaponShip)
+  const resolvedShip = withCombatMetrics(withSensorDefaults(weaponShip))
 
   return {
     ...resolvedShip,
@@ -881,9 +1030,13 @@ function withComponentOverrides(ship, customConfig) {
     })
 
     if (slot.type === 'shield_generators' && component.shield) {
+      const damagedDelay = Number(component.shield.damagedDelay) || next.shieldDamagedDelay || next.shieldCooldown || 5
+      const downedDelay = Number(component.shield.downedDelay) || next.shieldDownedDelay || damagedDelay * 2
       next.shieldMax = round1((Number(component.shield.maxHealth) || next.shieldMax / mounts) * mounts)
       next.shieldRegen = round1((Number(component.shield.regenRate) || next.shieldRegen / mounts) * mounts)
-      next.shieldCooldown = round1(Number(component.shield.damagedDelay) || next.shieldCooldown || 5)
+      next.shieldDamagedDelay = round1(damagedDelay)
+      next.shieldDownedDelay = round1(downedDelay)
+      next.shieldCooldown = next.shieldDamagedDelay
       next.shieldResistance = component.shield.resistance ?? next.shieldResistance
       next.shieldAbsorption = component.shield.absorption ?? next.shieldAbsorption
       next.shieldSource = component.name
@@ -1190,8 +1343,8 @@ function normalizeWeaponLoadout(ship) {
         count,
         mount: mount.mount ?? 'fixed',
         totalBurstDps: (Number(weapon.burstDps) || 0) * count,
-        simBurstDps: (Number(weapon.burstDps) || 0) * count * WEAPON_DPS_TO_SIM_SCALE,
-        simAlpha: (Number(weapon.alpha) || 0) * WEAPON_DPS_TO_SIM_SCALE,
+        simBurstDps: (Number(weapon.burstDps) || 0) * count * WEAPON_DAMAGE_TO_SIM_SCALE,
+        simAlpha: (Number(weapon.alpha) || 0) * WEAPON_DAMAGE_TO_SIM_SCALE,
         damageProfile: normalizeDamageProfile(weapon),
       }
     })
@@ -1256,15 +1409,16 @@ function calculateWeaponBank(ship, loadout) {
     .reduce((sum, group) => sum + (Number(group.count) || 0), 0)
   const powerPlant = powerPlantWeaponSupport(ship)
 
-  const baseCapacity = activeWeapons.reduce((sum, w) => sum + weaponCapacityUnits(w) * w.count, 0)
+  const capWeapons = activeWeapons.filter(w => !isBallisticWeapon(w))
+  const baseCapacity = capWeapons.reduce((sum, w) => sum + weaponCapacityUnits(w) * w.count, 0)
   const capacity = clamp(
     75,
     baseCapacity * powerPlant.capacityMult,
     190
   )
-  const baseDrainPerSec = activeWeapons.reduce((sum, w) => sum + weaponDrainPerSecond(w) * w.count, 0)
+  const baseDrainPerSec = capWeapons.reduce((sum, w) => sum + weaponDrainPerSecond(w) * w.count, 0)
   const drainPerSec = clamp(
-    18,
+    0,
     baseDrainPerSec * powerPlant.drainMult,
     62
   )
@@ -1307,7 +1461,7 @@ function toWeaponFireGroup(weapon) {
   const rpm = Math.max(1, Number(weapon.rpm) || 60)
   const alpha = Math.max(0, Number(weapon.alpha) || 0)
   const burstDps = Math.max(0, Number(weapon.burstDps) || 0)
-  const simAlpha = Math.max(0, Number(weapon.simAlpha) || alpha * WEAPON_DPS_TO_SIM_SCALE)
+  const simAlpha = Math.max(0, Number(weapon.simAlpha) || alpha * WEAPON_DAMAGE_TO_SIM_SCALE)
   const capCost = weaponCapCostPerShot(weapon)
   const count = Math.max(1, Number(weapon.count) || 1)
   const ammoPerWeapon = Number(weapon.ammo)
@@ -1327,7 +1481,7 @@ function toWeaponFireGroup(weapon) {
     rawAlpha: round1(alpha),
     simAlpha: round2(simAlpha),
     rawBurstDps: round1(burstDps * count),
-    simBurstDps: round1(burstDps * count * WEAPON_DPS_TO_SIM_SCALE),
+    simBurstDps: round1(burstDps * count * WEAPON_DAMAGE_TO_SIM_SCALE),
     rangeM: Math.round(Number(weapon.range) || 0),
     projectileSpeed: Math.round(Number(weapon.speed) || 0),
     spreadMax: Number(weapon.spreadMax) || 0,
@@ -1342,6 +1496,11 @@ function toWeaponFireGroup(weapon) {
 
 function weaponCapCostPerShot(weapon) {
   if (isBallisticWeapon(weapon)) return 0
+
+  const capacitorAmmo = Number(weapon.capacitorAmmo)
+  if (Number.isFinite(capacitorAmmo) && capacitorAmmo > 0) {
+    return weaponCapacityUnits(weapon) / capacitorAmmo
+  }
 
   const capCost = Number(weapon.capacitorCostPerShot)
   if (Number.isFinite(capCost) && capCost > 0) return capCost / 18
@@ -1454,6 +1613,14 @@ function weaponCapacityUnits(weapon) {
 }
 
 function weaponDrainPerSecond(weapon) {
+  if (isBallisticWeapon(weapon)) return 0
+
+  const capacitorAmmo = Number(weapon.capacitorAmmo)
+  const capacitorRpm = Number(weapon.rpm)
+  if (Number.isFinite(capacitorAmmo) && capacitorAmmo > 0 && Number.isFinite(capacitorRpm) && capacitorRpm > 0) {
+    return clamp(3, weaponCapCostPerShot(weapon) * (capacitorRpm / 60), 32)
+  }
+
   const capCost = Number(weapon.capacitorCostPerShot)
   const realRpm = Number(weapon.rpm)
   if (Number.isFinite(capCost) && capCost > 0 && Number.isFinite(realRpm) && realRpm > 0) {
@@ -1565,10 +1732,278 @@ function withSensorDefaults(ship) {
   return { ...ship, radarStrength, sigEM, sigIR, sigCS, signatureProfile }
 }
 
+function withCombatMetrics(ship) {
+  const weaponry = weaponryMetricsForShip(ship)
+  const armor = armorMetricsForShip(ship)
+  const flight = flightMetricsForShip(ship)
+  const computed = computedCombatMetricsForShip(ship)
+  const hasEstimatedFlight = Boolean(flight.accelerations?.estimated)
+  const shipDisplaySource = ship.shipDataSource === 'real' && hasEstimatedFlight ? 'mixed' : ship.shipDataSource ?? 'mock'
+
+  return {
+    ...ship,
+    combatMetrics: {
+      displaySource: shipDisplaySource,
+      hull: {
+        dimensionsLabel: dimensionLabelForShip(ship),
+        massKg: Math.round(Number(ship.realVehicle?.mass?.hull) || Number(ship.realVehicle?.mass?.total) || 0),
+        totalHealthHp: Math.round(Number(ship.hullMax) || 0),
+        bodyHp: Math.round(Number(ship.vitalHullMax) || 0),
+      },
+      weaponry,
+      armor,
+      flight,
+      computed,
+    },
+  }
+}
+
+function weaponryMetricsForShip(ship) {
+  const weaponMetrics = loadoutWeaponMetrics(ship)
+  const missileCount = Math.round(Number(ship.realVehicle?.weaponry?.missileCount) || 0)
+  const missileDamage = Math.round(Number(ship.realVehicle?.weaponry?.totalMissileDamage) || 0)
+  const ammoCapacity = Math.round(Number(ship.weaponBank?.ammoCapacity) || 0)
+  const ballisticWeaponCount = Math.round(Number(ship.weaponBank?.ballisticWeaponCount) || 0)
+
+  return {
+    pilotBurstDps: Math.round(weaponMetrics.burstDps),
+    pilotSustainedDps: Math.round(weaponMetrics.sustainedDps),
+    pilotAlpha: round1(weaponMetrics.alpha),
+    dpsSource: weaponMetrics.source,
+    shieldBubbleHp: Math.round(Number(ship.shieldMax) || 0),
+    missileCount,
+    missileDamage,
+    ballisticAmmo: ballisticWeaponCount > 0 ? ammoCapacity : null,
+    ballisticWeaponCount,
+  }
+}
+
+function armorMetricsForShip(ship) {
+  const armor = ship.realVehicle?.armor ?? {}
+  const damageMultipliers = armor.damageMultipliers ?? {}
+  const resistanceMultipliers = armor.resistanceMultipliers ?? {}
+  const signalMultipliers = armor.signalMultipliers ?? {}
+  const penetrationResistance = armor.penetrationResistance ?? {}
+  const hullHp = Number(ship.hullMax) || 0
+  const physicalMultiplier = Number(damageMultipliers.physical)
+  const energyMultiplier = Number(damageMultipliers.energy)
+
+  return {
+    apiHealthHp: Math.round(Number(armor.health) || 0),
+    effectiveHullHp: {
+      physical: Number.isFinite(physicalMultiplier) && physicalMultiplier > 0
+        ? Math.round(hullHp / physicalMultiplier)
+        : null,
+      energy: Number.isFinite(energyMultiplier) && energyMultiplier > 0
+        ? Math.round(hullHp / energyMultiplier)
+        : null,
+    },
+    rawDamageMultipliers: {
+      physical: Number.isFinite(physicalMultiplier) ? round2(physicalMultiplier) : null,
+      energy: Number.isFinite(energyMultiplier) ? round2(energyMultiplier) : null,
+    },
+    damageModifiers: {
+      physical: multiplierDeltaPct(damageMultipliers.physical),
+      energy: multiplierDeltaPct(damageMultipliers.energy),
+      distortion: multiplierDeltaPct(damageMultipliers.distortion),
+    },
+    durabilityModifiers: {
+      physical: multiplierDeltaPct(resistanceMultipliers.physical),
+      energy: multiplierDeltaPct(resistanceMultipliers.energy),
+    },
+    signatureModifiers: {
+      electromagnetic: multiplierDeltaPct(signalMultipliers.electromagnetic),
+      crossSection: multiplierDeltaPct(signalMultipliers.cross_section),
+      infrared: multiplierDeltaPct(signalMultipliers.infrared),
+    },
+    deflection: {
+      physical: Math.round(Number(ship.armorDeflectionPhysical) || 0),
+      energy: Math.round(Number(ship.armorDeflectionEnergy) || 0),
+    },
+    penetrationResistance: {
+      physical: multiplierDeltaPct(penetrationResistance.physical),
+      energy: multiplierDeltaPct(penetrationResistance.energy),
+    },
+  }
+}
+
+function flightMetricsForShip(ship) {
+  const speed = ship.realVehicle?.speed ?? {}
+  const agility = ship.realVehicle?.agility ?? {}
+
+  return {
+    scm: Math.round(Number(ship.speedSCM) || 0),
+    nav: Math.round(Number(ship.speedBoost) || 0),
+    forwardBoost: Math.round(Number(ship.boostForward) || Number(speed.boostForward) || 0),
+    backwardBoost: Math.round(Number(ship.boostBackward) || Number(speed.boostBackward) || 0),
+    pitch: round1(Number(agility.pitch) || 0),
+    yaw: round1(Number(agility.yaw) || 0),
+    roll: round1(Number(agility.roll) || 0),
+    pitchBoosted: round1(Number(agility.pitchBoosted) || 0),
+    yawBoosted: round1(Number(agility.yawBoosted) || 0),
+    rollBoosted: round1(Number(agility.rollBoosted) || 0),
+    accelerations: estimatedAccelerationGs(ship),
+  }
+}
+
+function computedCombatMetricsForShip(ship) {
+  const turn = averageDefined(ship.realVehicle?.agility?.pitch, ship.realVehicle?.agility?.yaw)
+  const turnScore = clamp(0, (turn - 28) / 42, 1)
+  const maneuverability = clamp(0.14, turnScore * 0.42 + (Number(ship.thrusterScore) || 0) * 0.58, 1)
+
+  return {
+    precisionPct: Math.round((Number(ship.accuracy) || 0) * 100),
+    evasionPct: Math.round((Number(ship.evasion) || 0) * 100),
+    maneuverabilityPct: Math.round(maneuverability * 100),
+    ballisticAmmo: Number(ship.weaponBank?.ballisticWeaponCount) > 0 ? Math.round(Number(ship.weaponBank?.ammoCapacity) || 0) : null,
+  }
+}
+
+function loadoutWeaponMetrics(ship) {
+  const mounts = Array.isArray(ship.weaponLoadout) ? ship.weaponLoadout : []
+  let burst = 0
+  let sustained = 0
+  let alpha = 0
+  let realMatches = 0
+  let estimatedMatches = 0
+
+  mounts.forEach((mount) => {
+    const weapon = WEAPON_CATALOG[mount.weaponId ?? mount.id]
+    if (!weapon) return
+    const count = Math.max(1, Number(mount.count) || 1)
+    const burstPerWeapon = Number(weapon.burstDps) || 0
+    const sustainedEstimate = sustainedDpsForWeapon(weapon)
+    burst += burstPerWeapon * count
+    sustained += sustainedEstimate.value * count
+    alpha += (Number(weapon.alpha) || 0) * count
+    if (sustainedEstimate.source === 'real') realMatches += count
+    else estimatedMatches += count
+  })
+
+  const source = estimatedMatches <= 0 ? 'real' : realMatches > 0 ? 'mixed' : 'estimated'
+  return { burstDps: burst, sustainedDps: sustained, alpha, source }
+}
+
+function sustainedDpsForWeapon(weapon) {
+  const lookup = weaponSustainedLookup()
+  const match = lookup[weapon.id]
+  if (match) return { value: Number(match.sustainedDps) || 0, source: 'real' }
+
+  const burst = Number(weapon.burstDps) || 0
+  const type = `${weapon.type ?? ''}`.toLowerCase()
+  if (type.includes('ballistic cannon')) return { value: burst * 0.34, source: 'estimated' }
+  if (type.includes('ballistic gatling')) return { value: burst * 0.74, source: 'estimated' }
+  if (type.includes('ballistic')) return { value: burst * 0.62, source: 'estimated' }
+  if (type.includes('laser cannon')) return { value: burst * 0.39, source: 'estimated' }
+  if (type.includes('laser repeater')) return { value: burst * 0.54, source: 'estimated' }
+  return { value: burst * 0.48, source: 'estimated' }
+}
+
+let WEAPON_SUSTAINED_LOOKUP_CACHE = null
+
+function weaponSustainedLookup() {
+  if (WEAPON_SUSTAINED_LOOKUP_CACHE) return WEAPON_SUSTAINED_LOOKUP_CACHE
+
+  const aggregated = {}
+
+  Object.values(REAL_VEHICLE_CATALOG).forEach((vehicle) => {
+    const fixedWeapons = vehicle.weaponry?.fixedWeapons ?? []
+    fixedWeapons.forEach((entry) => {
+      const sustainedDps = Number(entry.sustainedDps)
+      const burstDps = Number(entry.dps)
+      if (!Number.isFinite(sustainedDps) || sustainedDps <= 0 || !Number.isFinite(burstDps) || burstDps <= 0) return
+      const weaponId = catalogIdForWeaponName(entry.name)
+      if (!weaponId) return
+
+      const current = aggregated[weaponId] ?? { sustainedSum: 0, burstSum: 0, count: 0 }
+      current.sustainedSum += sustainedDps
+      current.burstSum += burstDps
+      current.count += 1
+      aggregated[weaponId] = current
+    })
+  })
+
+  WEAPON_SUSTAINED_LOOKUP_CACHE = Object.fromEntries(Object.entries(aggregated).map(([weaponId, value]) => {
+    const count = Math.max(1, Number(value.count) || 1)
+    const sustainedDps = value.sustainedSum / count
+    const burstDps = value.burstSum / count
+    return [weaponId, {
+      sustainedDps: round1(sustainedDps),
+      burstDps: round1(burstDps),
+      ratio: round3(sustainedDps / Math.max(1, burstDps)),
+    }]
+  }))
+
+  return WEAPON_SUSTAINED_LOOKUP_CACHE
+}
+
+function estimatedAccelerationGs(ship) {
+  const scm = Math.max(0, Number(ship.speedSCM) || 0)
+  const boostForward = Math.max(0, Number(ship.boostForward) || 0)
+  const boostBackward = Math.max(0, Number(ship.boostBackward) || 0)
+  const zeroToScm = Number(ship.zeroToScm)
+  const strafe = Number(ship.strafeThrusterScore) || 0
+  const vertical = Number(ship.verticalThrusterScore) || 0
+
+  if (!Number.isFinite(zeroToScm) || zeroToScm <= 0 || scm <= 0) {
+    return { estimated: true, main: null, retro: null, up: null, down: null, strafe: null }
+  }
+
+  const baseMain = round1((scm / zeroToScm / 9.81) * 1.39)
+  const boostMain = round1((Math.max(boostForward, scm) / zeroToScm / 9.81) * 0.94)
+  const backwardRatio = boostForward > 0 ? clamp(0.22, boostBackward / boostForward, 0.75) : 0.5
+  const retro = round1(baseMain * backwardRatio * 0.58)
+  const retroBoosted = round1(boostMain * backwardRatio * 0.54)
+  const up = round1(baseMain * clamp(0.45, vertical, 1) * 0.91)
+  const upBoosted = round1(boostMain * clamp(0.45, vertical, 1) * 0.76)
+  const down = round1(up * 0.5)
+  const downBoosted = round1(upBoosted * 0.52)
+  const strafeBase = round1(baseMain * clamp(0.35, strafe, 1) * 1.02)
+  const strafeBoosted = round1(boostMain * clamp(0.35, strafe, 1) * 0.85)
+
+  return {
+    estimated: true,
+    main: { base: baseMain, boosted: boostMain },
+    retro: { base: retro, boosted: retroBoosted },
+    up: { base: up, boosted: upBoosted },
+    down: { base: down, boosted: downBoosted },
+    strafe: { base: strafeBase, boosted: strafeBoosted },
+  }
+}
+
+function dimensionLabelForShip(ship) {
+  const dimensions = ship.realVehicle?.dimensions ?? {}
+  const sizeClass = Number(ship.realVehicle?.sizeClass)
+  const sizeLabel = Number.isFinite(sizeClass) ? `S${sizeClass}` : ship.size ?? 'S'
+  const length = round1(Number(dimensions.length) || 0)
+  const width = round1(Number(dimensions.width) || 0)
+  const height = round1(Number(dimensions.height) || 0)
+  if (length <= 0 || width <= 0 || height <= 0) return null
+  return `(${sizeLabel}) ${formatCompactNumber(length)} L x ${formatCompactNumber(width)} W x ${formatCompactNumber(height)} H m`
+}
+
+function multiplierDeltaPct(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return Math.round((n - 1) * 100)
+}
+
+function averageDefined(a, b) {
+  const values = [Number(a), Number(b)].filter(value => Number.isFinite(value))
+  if (values.length === 0) return 0
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function formatCompactNumber(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '0'
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, '')
+}
+
 export const SHIPS = Object.fromEntries(
   Object.entries(BASE_SHIPS).map(([id, ship]) => {
     const realShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(ship)))
-    return [id, withSensorDefaults(withWeaponDefaults(realShip))]
+    return [id, withCombatMetrics(withSensorDefaults(withWeaponDefaults(realShip)))]
   })
 )
 

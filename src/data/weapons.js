@@ -3,7 +3,10 @@ import { MOCK_WEAPON_CATALOG } from './weapons.mock.js'
 
 export const WEAPON_CATALOG = mergeWeaponCatalogs(MOCK_WEAPON_CATALOG, REAL_WEAPON_CATALOG)
 export const WEAPON_SOURCE_META = WEAPON_DATA_META
+// Escala ligera para heurísticas auxiliares y comparativas resumidas de la nave.
 export const WEAPON_DPS_TO_SIM_SCALE = 0.14
+// Escala real de daño usada por el motor de combate con datos de armas reales.
+export const WEAPON_DAMAGE_TO_SIM_SCALE = 0.26
 
 export function weaponMount(weaponId, count, mount = 'fixed') {
   return { weaponId, count, mount }
