@@ -16,6 +16,7 @@
  *
  * Capacitor de armas:
  *   - La capacidad/recarga/consumo vienen del banco de armas equipado
+ *   - La planta de energía modula capacidad, recarga y consumo efectivo
  *   - Disparar consume capacitor; sin capacitor suficiente se corta la ráfaga
  *   - El capacitor regenera cuando la nave no dispara
  *   - Tras vaciarse, la nave espera una reserva mínima antes de reabrir fuego
@@ -101,11 +102,16 @@ export const WEAPON_CAP_SKILL_EFFICIENCY = 0.012
 export const SHIELD_ENERGY_MULT = 1.00
 export const SHIELD_PHYSICAL_MULT = 0.55
 export const SHIELD_DISTORTION_MULT = 1.20
-export const PHYSICAL_SHIELD_BLEED_MIN = 0.08
-export const PHYSICAL_SHIELD_BLEED_MAX = 0.38
+export const PHYSICAL_SHIELD_BLEED_MIN = 0.04
+export const PHYSICAL_SHIELD_BLEED_MAX = 0.32
 export const ARMOR_REDUCTION_MIN = 0.04
 export const ARMOR_REDUCTION_MAX = 0.28
-export const ARMOR_PENETRATION_SCALE = 0.055
+export const PENETRATION_DEPTH_REF_M = 6
+export const PENETRATION_RADIUS_REF_M = 0.45
+export const PENETRATION_ARMOR_BYPASS_MIN = 0.05
+export const PENETRATION_ARMOR_BYPASS_MAX = 0.82
+export const PENETRATION_RANGE_FALLOFF_START = 0.35
+export const PENETRATION_RANGE_FALLOFF_MIN = 0.68
 
 /** Modelo de detección (primer contacto / reacción) */
 export const DETECTION_RANGE_DEFAULT_M = 20000
@@ -309,8 +315,8 @@ export function runSimulation({
 
     const varA = varianceForShot(vA, rangeM, rOptA, inMergeWindow)
     const varB = varianceForShot(vB, rangeM, rOptB, inMergeWindow)
-    const fireA = resolveWeaponFire(stateA, weaponCapProfileA, wantsFireA, hitChanceA, varA, rng)
-    const fireB = resolveWeaponFire(stateB, weaponCapProfileB, wantsFireB, hitChanceB, varB, rng)
+    const fireA = resolveWeaponFire(stateA, weaponCapProfileA, wantsFireA, hitChanceA, varA, rng, rangeM)
+    const fireB = resolveWeaponFire(stateB, weaponCapProfileB, wantsFireB, hitChanceB, varB, rng, rangeM)
     if (fireA.capStarved) capStarvedTicksA++
     if (fireB.capStarved) capStarvedTicksB++
     if (fireA.ammoDry) ammoDryTicksA++
@@ -474,6 +480,7 @@ export function runSimulation({
         damageByType:    roundedDamageBuckets(totalDmgTypesA),
         shieldDmgDealt:  Math.round(totalShieldDmgA),
         hullDmgDealt:    Math.round(totalHullDmgA),
+        hullArmorPct:    Math.round(armorReductionForShip(shipA) * 100),
         weaponGroups:    weaponCapProfileA.weaponGroups,
         shotsFired:      totalShotsA,
         hits:            totalHitsA,
@@ -487,6 +494,10 @@ export function runSimulation({
         weaponCapRegen:  parseFloat(weaponCapProfileA.regenPerSec.toFixed(1)),
         weaponCapDrain:  parseFloat(weaponCapProfileA.drainPerSec.toFixed(1)),
         weaponCount:     weaponCapProfileA.weaponCount,
+        ballisticWeaponCount: weaponCapProfileA.ballisticWeaponCount,
+        powerPlantOutput: weaponCapProfileA.powerPlantOutput,
+        powerPlantEnergyRatio: weaponCapProfileA.powerPlantEnergyRatio,
+        powerPlantRegenMult: weaponCapProfileA.powerPlantRegenMult,
         weaponDataSource: weaponCapProfileA.dataSource,
         ammoCapacity:    ammoCapacityA,
         ammoRemaining:   ammoRemainingA,
@@ -509,6 +520,7 @@ export function runSimulation({
         damageByType:    roundedDamageBuckets(totalDmgTypesB),
         shieldDmgDealt:  Math.round(totalShieldDmgB),
         hullDmgDealt:    Math.round(totalHullDmgB),
+        hullArmorPct:    Math.round(armorReductionForShip(shipB) * 100),
         weaponGroups:    weaponCapProfileB.weaponGroups,
         shotsFired:      totalShotsB,
         hits:            totalHitsB,
@@ -522,6 +534,10 @@ export function runSimulation({
         weaponCapRegen:  parseFloat(weaponCapProfileB.regenPerSec.toFixed(1)),
         weaponCapDrain:  parseFloat(weaponCapProfileB.drainPerSec.toFixed(1)),
         weaponCount:     weaponCapProfileB.weaponCount,
+        ballisticWeaponCount: weaponCapProfileB.ballisticWeaponCount,
+        powerPlantOutput: weaponCapProfileB.powerPlantOutput,
+        powerPlantEnergyRatio: weaponCapProfileB.powerPlantEnergyRatio,
+        powerPlantRegenMult: weaponCapProfileB.powerPlantRegenMult,
         weaponDataSource: weaponCapProfileB.dataSource,
         ammoCapacity:    ammoCapacityB,
         ammoRemaining:   ammoRemainingB,
@@ -650,7 +666,7 @@ function initialWeaponAmmo(profile) {
   })
 }
 
-function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand) {
+function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand, rangeM = 0) {
   const groups = weaponGroupsForProfile(profile)
   ensureWeaponChargeSlots(state, groups)
   ensureWeaponAmmoSlots(state, groups)
@@ -707,6 +723,8 @@ function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand)
             damage: dmg,
             profile: group.damageProfile,
             penetration: group.penetration,
+            impactRangeM: rangeM,
+            weaponRangeM: group.rangeM,
             type: group.type,
           })
         }
@@ -781,8 +799,10 @@ function weaponFireInterval(group) {
 
 function weaponCapCost(group, profile) {
   const cost = Number(group?.capCostPerShot)
-  const base = Number.isFinite(cost) && cost > 0 ? cost : profile.drainPerSec * weaponFireInterval(group)
-  return Math.max(0.05, base * (profile.capCostMult ?? 1))
+  const mult = profile.capCostMult ?? 1
+  if (Number.isFinite(cost) && cost >= 0) return Math.max(0, cost * mult)
+  const base = profile.drainPerSec * weaponFireInterval(group)
+  return Math.max(0.05, base * mult)
 }
 
 function addDamageByProfile(target, damage, profile) {
@@ -839,6 +859,10 @@ function weaponCapProfile(ship, pilotSkill) {
     drainPerSec: drain,
     resumeAt: capacity * resumePct,
     weaponCount: bank.weaponCount,
+    ballisticWeaponCount: bank.ballisticWeaponCount,
+    powerPlantOutput: bank.powerPlantOutput,
+    powerPlantEnergyRatio: bank.powerPlantEnergyRatio,
+    powerPlantRegenMult: bank.powerPlantRegenMult,
     dataSource: bank.dataSource,
     capCostMult: discipline,
     fallbackDps: Number(ship?.dps) || 0,
@@ -854,6 +878,10 @@ function weaponBankForShip(ship) {
       regenPerSec: Number(bank.regenPerSec) || WEAPON_CAP_REGEN_MIN,
       drainPerSec: Number(bank.drainPerSec) || WEAPON_CAP_DRAIN_MIN,
       weaponCount: Number(bank.weaponCount) || 0,
+      ballisticWeaponCount: Number(bank.ballisticWeaponCount) || 0,
+      powerPlantOutput: Number(bank.powerPlantOutput) || 0,
+      powerPlantEnergyRatio: Number(bank.powerPlantEnergyRatio) || 1,
+      powerPlantRegenMult: Number(bank.powerPlantRegenMult) || 1,
       dataSource: bank.dataSource ?? 'mock',
       weaponGroups: bank.weaponGroups ?? [],
     }
@@ -870,6 +898,10 @@ function weaponBankForShip(ship) {
     regenPerSec: clamp(12 + hardpointLoad * 0.7 + Math.max(0, 240 - dps) / 60, WEAPON_CAP_REGEN_MIN, WEAPON_CAP_REGEN_MAX),
     drainPerSec: clamp(18 + dps * 0.095 + hardpointLoad * 0.45, WEAPON_CAP_DRAIN_MIN, WEAPON_CAP_DRAIN_MAX),
     weaponCount: Object.values(ship?.hardpoints ?? {}).reduce((sum, count) => sum + (Number(count) || 0), 0),
+    ballisticWeaponCount: 0,
+    powerPlantOutput: 0,
+    powerPlantEnergyRatio: 1,
+    powerPlantRegenMult: 1,
     dataSource: 'mock',
     weaponGroups: [],
   }
@@ -986,7 +1018,7 @@ function applyDamage(state, impacts, defenderShip) {
       const base = (Number(impact.damage) || 0) * (Number(fraction) || 0)
       if (base <= 0) return
 
-      const penetration = penetrationValue(impact.penetration)
+      const penetration = penetrationModel(impact.penetration, impact.impactRangeM, impact.weaponRangeM)
       let shieldApplied = 0
       let hullApplied = 0
 
@@ -1040,7 +1072,11 @@ function shieldMultiplierForDamage(type) {
 
 function shieldBleedForDamage(type, penetration) {
   if (type !== 'physical') return 0
-  return clamp(PHYSICAL_SHIELD_BLEED_MIN + penetration * 0.08, PHYSICAL_SHIELD_BLEED_MIN, PHYSICAL_SHIELD_BLEED_MAX)
+  return clamp(
+    PHYSICAL_SHIELD_BLEED_MIN + penetration.shieldPierce * (PHYSICAL_SHIELD_BLEED_MAX - PHYSICAL_SHIELD_BLEED_MIN),
+    PHYSICAL_SHIELD_BLEED_MIN,
+    PHYSICAL_SHIELD_BLEED_MAX
+  )
 }
 
 function hullMultiplierForDamage(type, penetration, ship) {
@@ -1048,14 +1084,40 @@ function hullMultiplierForDamage(type, penetration, ship) {
 
   const armor = armorReductionForShip(ship)
   if (type === 'physical') {
-    const reducedArmor = Math.max(0, armor - penetration * ARMOR_PENETRATION_SCALE)
-    return clamp(1 - reducedArmor, 0.68, 1.08)
+    const realMultiplier = armorDamageMultiplierForShip(ship, 'physical')
+    if (Number.isFinite(realMultiplier)) {
+      const effectiveArmor = (1 - realMultiplier) * (1 - penetrationArmorBypass(penetration))
+      return clamp(1 - effectiveArmor, 0.45, 1)
+    }
+
+    const bypass = penetrationArmorBypass(penetration)
+    const effectiveArmor = armor * (1 - bypass)
+    return clamp(1 - effectiveArmor, 0.70, 1)
   }
-  if (type === 'energy') return clamp(1 - armor * 1.10, 0.62, 1)
+  if (type === 'energy') {
+    const energyBypass = Math.min(0.18, penetration.armorPierce * 0.08)
+    const realMultiplier = armorDamageMultiplierForShip(ship, 'energy')
+    if (Number.isFinite(realMultiplier)) {
+      const effectiveArmor = (1 - realMultiplier) * (1 - energyBypass)
+      return clamp(1 - effectiveArmor, 0.45, 1)
+    }
+
+    return clamp(1 - armor * (1 - energyBypass) * 1.10, 0.62, 1)
+  }
   return clamp(1 - armor * 0.85, 0.65, 1)
 }
 
 function armorReductionForShip(ship) {
+  const explicitArmor = Number(ship?.armorReduction)
+  if (Number.isFinite(explicitArmor) && explicitArmor > 0) {
+    return clamp(explicitArmor, ARMOR_REDUCTION_MIN, ARMOR_REDUCTION_MAX)
+  }
+
+  const realPhysicalMultiplier = armorDamageMultiplierForShip(ship, 'physical')
+  if (Number.isFinite(realPhysicalMultiplier)) {
+    return clamp(1 - realPhysicalMultiplier, ARMOR_REDUCTION_MIN, ARMOR_REDUCTION_MAX)
+  }
+
   const sizeBase = {
     XS: 0.04,
     S: 0.08,
@@ -1066,12 +1128,57 @@ function armorReductionForShip(ship) {
   return clamp(sizeBase + hullBonus, ARMOR_REDUCTION_MIN, ARMOR_REDUCTION_MAX)
 }
 
-function penetrationValue(penetration) {
-  if (typeof penetration === 'number') return Math.max(0, penetration)
-  if (penetration && typeof penetration === 'object') {
-    return Math.max(0, Number(penetration.thickness) || Number(penetration.baseDistance) || 0)
+function armorDamageMultiplierForShip(ship, type) {
+  const value = Number(ship?.armorDamageMultipliers?.[type])
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function penetrationModel(penetration, impactRangeM = 0, weaponRangeM = 0) {
+  const p = typeof penetration === 'number'
+    ? { thickness: penetration, baseDistance: penetration, nearRadius: 0, farRadius: 0 }
+    : penetration && typeof penetration === 'object'
+      ? penetration
+      : {}
+  const thickness = Math.max(0, Number(p.thickness) || 0)
+  const baseDistance = Math.max(0, Number(p.baseDistance) || 0)
+  const nearRadius = Math.max(0, Number(p.nearRadius) || 0)
+  const farRadius = Math.max(nearRadius, Number(p.farRadius) || 0)
+  const avgRadius = (nearRadius + farRadius) / 2
+  const rangeFactor = penetrationRangeFactor(impactRangeM, weaponRangeM)
+
+  const thicknessScore = clamp01(thickness / 0.5)
+  const depthScore = clamp01(Math.sqrt(baseDistance / PENETRATION_DEPTH_REF_M))
+  const radiusScore = clamp01(Math.sqrt(avgRadius / PENETRATION_RADIUS_REF_M))
+
+  return {
+    thickness,
+    baseDistance,
+    nearRadius,
+    farRadius,
+    rangeFactor,
+    armorPierce: clamp01((thicknessScore * 0.20 + depthScore * 0.60 + radiusScore * 0.20) * rangeFactor),
+    shieldPierce: clamp01((thicknessScore * 0.20 + depthScore * 0.35 + radiusScore * 0.45) * rangeFactor),
   }
-  return 0
+}
+
+function penetrationArmorBypass(penetration) {
+  return clamp(
+    PENETRATION_ARMOR_BYPASS_MIN + penetration.armorPierce * (PENETRATION_ARMOR_BYPASS_MAX - PENETRATION_ARMOR_BYPASS_MIN),
+    PENETRATION_ARMOR_BYPASS_MIN,
+    PENETRATION_ARMOR_BYPASS_MAX
+  )
+}
+
+function penetrationRangeFactor(impactRangeM, weaponRangeM) {
+  const weaponRange = Number(weaponRangeM)
+  const impactRange = Number(impactRangeM)
+  if (!Number.isFinite(weaponRange) || weaponRange <= 0 || !Number.isFinite(impactRange) || impactRange <= 0) return 1
+
+  const ratio = clamp01(impactRange / weaponRange)
+  if (ratio <= PENETRATION_RANGE_FALLOFF_START) return 1
+
+  const t = (ratio - PENETRATION_RANGE_FALLOFF_START) / (1 - PENETRATION_RANGE_FALLOFF_START)
+  return clamp(1 - t * (1 - PENETRATION_RANGE_FALLOFF_MIN), PENETRATION_RANGE_FALLOFF_MIN, 1)
 }
 
 function normalizeDamageName(type) {

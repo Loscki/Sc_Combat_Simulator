@@ -39,7 +39,7 @@ body {
   line-height: 1.5;
 }
 
-.app { max-width: 860px; margin: 0 auto; }
+.app { max-width: 1080px; margin: 0 auto; }
 
 .app-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 1.5rem; }
 .app-header h1 { font-size: 18px; font-weight: 500; }
@@ -65,6 +65,7 @@ body {
 .ship-name  { font-size: 13px; font-weight: 500; display: block; }
 .ship-meta  { font-size: 11px; color: var(--text-secondary); }
 .ship-select-row { margin: 2px 0 10px; }
+.loadout-select-row { margin: -4px 0 10px; }
 .ship-select {
   width: 100%;
   padding: 8px 10px;
@@ -77,6 +78,33 @@ body {
 }
 .ship-select:focus { outline: none; border-color: var(--text-secondary); }
 .ship-select optgroup { color: var(--text-secondary); }
+
+.loadout-configurator {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 0.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+.config-group { display: flex; flex-direction: column; gap: 7px; }
+.config-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.config-group-title i { color: var(--text-tertiary); font-size: 14px; }
+.config-select-row { display: grid; grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr); align-items: center; gap: 8px; }
+.config-select-label { color: var(--text-secondary); font-size: 11px; line-height: 1.25; }
+.config-select { padding: 7px 8px; font-size: 12px; background: var(--bg-primary); }
+
 .dps-badge  { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
 .data-source { display: inline-flex; width: fit-content; margin-bottom: 10px; padding: 2px 7px; border-radius: var(--radius-md); font-size: 11px; color: var(--text-secondary); background: var(--bg-secondary); border: 0.5px solid var(--border-light); }
 .data-source-real { color: #1D6C50; background: #E7F3EE; border-color: rgba(29, 108, 80, .18); }
@@ -241,4 +269,5 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   .selected-run-meta { justify-content: flex-start; }
   .runs-sidebar { width: auto; }
   .runs-list { max-height: 220px; }
+  .config-select-row { grid-template-columns: 1fr; gap: 4px; }
 }

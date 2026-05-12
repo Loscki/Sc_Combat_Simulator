@@ -45,6 +45,7 @@ function SelectedRunHeader({ result }) {
 export default function App() {
   const {
     config, updateConfig,
+    updateShipWeapon, updateShipComponent,
     simulate, reset,
     isRunning, result,
     runs, selectedRunId, selectRun,
@@ -57,7 +58,7 @@ export default function App() {
     <div className={`app ${isMulti ? 'has-run-history' : ''}`}>
       <header className="app-header">
         <h1>SC Combat Simulator</h1>
-        <span className="app-version">v0.1 · mock data · Gladius vs Arrow</span>
+        <span className="app-version">v0.1 · armas reales · loadouts configurables</span>
       </header>
 
       {/* ── SETUP ── */}
@@ -68,14 +69,18 @@ export default function App() {
             shipId={config.shipAId}
             ships={ships}
             side="a"
-            onSelectShip={(nextId) => updateConfig({ shipAId: nextId })}
+            onSelectShip={(nextId) => updateConfig({ shipAId: nextId, shipALoadoutId: 'stock', shipACustomConfig: { weaponsBySlot: {}, components: {} } })}
+            onSelectWeapon={(slotId, weaponId) => updateShipWeapon('a', slotId, weaponId)}
+            onSelectComponent={(componentType, componentId) => updateShipComponent('a', componentType, componentId)}
           />
           <ShipCard
             ship={shipB}
             shipId={config.shipBId}
             ships={ships}
             side="b"
-            onSelectShip={(nextId) => updateConfig({ shipBId: nextId })}
+            onSelectShip={(nextId) => updateConfig({ shipBId: nextId, shipBLoadoutId: 'stock', shipBCustomConfig: { weaponsBySlot: {}, components: {} } })}
+            onSelectWeapon={(slotId, weaponId) => updateShipWeapon('b', slotId, weaponId)}
+            onSelectComponent={(componentType, componentId) => updateShipComponent('b', componentType, componentId)}
           />
         </div>
         <SimControls

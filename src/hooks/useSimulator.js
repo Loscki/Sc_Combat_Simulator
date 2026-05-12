@@ -8,11 +8,15 @@
 
 import { useState, useCallback } from 'react'
 import { runSimulation } from '../engine/combatEngine'
-import { SHIPS } from '../data/ships'
+import { CUSTOM_LOADOUT_ID, getShipForLoadout, SHIPS, STOCK_LOADOUT_ID } from '../data/ships'
 
 const DEFAULT_CONFIG = {
   shipAId:     'aegs_gladius',
   shipBId:     'anvl_arrow',
+  shipALoadoutId: STOCK_LOADOUT_ID,
+  shipBLoadoutId: STOCK_LOADOUT_ID,
+  shipACustomConfig: { weaponsBySlot: {}, components: {} },
+  shipBCustomConfig: { weaponsBySlot: {}, components: {} },
   mode:        'timed',    // 'timed' | 'death'
   durationMin: 3,          // minutos (modo timed)
   maxTimeMin:  5,          // minutos máximos (modo death)
@@ -36,6 +40,57 @@ export function useSimulator() {
     setSelectedRunId(null)
   }, [])
 
+  const updateShipWeapon = useCallback((side, slotId, weaponId) => {
+    setConfig((prev) => {
+      const isA = side === 'a'
+      const loadoutKey = isA ? 'shipALoadoutId' : 'shipBLoadoutId'
+      const configKey = isA ? 'shipACustomConfig' : 'shipBCustomConfig'
+      const current = prev[configKey] ?? { weaponsBySlot: {}, components: {} }
+      const weaponsBySlot = { ...(current.weaponsBySlot ?? {}) }
+      const key = String(slotId)
+
+      if (weaponId) {
+        weaponsBySlot[key] = weaponId
+      } else {
+        delete weaponsBySlot[key]
+      }
+
+      const hasCustomWeapons = Object.keys(weaponsBySlot).length > 0
+
+      return {
+        ...prev,
+        [configKey]: { ...current, weaponsBySlot },
+        [loadoutKey]: hasCustomWeapons
+          ? CUSTOM_LOADOUT_ID
+          : prev[loadoutKey] === CUSTOM_LOADOUT_ID ? STOCK_LOADOUT_ID : prev[loadoutKey],
+      }
+    })
+    setRuns([])
+    setSelectedRunId(null)
+  }, [])
+
+  const updateShipComponent = useCallback((side, componentType, componentId) => {
+    setConfig((prev) => {
+      const isA = side === 'a'
+      const configKey = isA ? 'shipACustomConfig' : 'shipBCustomConfig'
+      const current = prev[configKey] ?? { weaponsBySlot: {}, components: {} }
+      const components = { ...(current.components ?? {}) }
+
+      if (componentId) {
+        components[componentType] = componentId
+      } else {
+        delete components[componentType]
+      }
+
+      return {
+        ...prev,
+        [configKey]: { ...current, components },
+      }
+    })
+    setRuns([])
+    setSelectedRunId(null)
+  }, [])
+
   const selectRun = useCallback((runId) => {
     setSelectedRunId(runId)
   }, [])
@@ -47,8 +102,12 @@ export function useSimulator() {
 
     // setTimeout(0) para dejar que React actualice la UI antes del cálculo
     setTimeout(() => {
-      const shipA = SHIPS[config.shipAId]
-      const shipB = SHIPS[config.shipBId]
+      const shipA = {
+        ...getShipForLoadout(config.shipAId, config.shipALoadoutId, config.shipACustomConfig),
+      }
+      const shipB = {
+        ...getShipForLoadout(config.shipBId, config.shipBLoadoutId, config.shipBCustomConfig),
+      }
 
       const count = config.multiSim ? Math.max(1, Math.min(200, Number(config.simCount) || 1)) : 1
       const createdAt = Date.now()
@@ -96,10 +155,14 @@ export function useSimulator() {
   const isMulti = runs.length > 1
 
   const summary = isMulti ? buildSummary(runs) : null
+  const shipA = getShipForLoadout(config.shipAId, config.shipALoadoutId, config.shipACustomConfig)
+  const shipB = getShipForLoadout(config.shipBId, config.shipBLoadoutId, config.shipBCustomConfig)
 
   return {
     config,
     updateConfig,
+    updateShipWeapon,
+    updateShipComponent,
     simulate,
     reset,
     isRunning,
@@ -111,8 +174,8 @@ export function useSimulator() {
     isMulti,
     ships: SHIPS,
     // Datos de las naves seleccionadas (para previsualización en UI)
-    shipA: SHIPS[config.shipAId],
-    shipB: SHIPS[config.shipBId],
+    shipA,
+    shipB,
   }
 }
 

@@ -69,11 +69,36 @@ function formatDamageTypes(types) {
 }
 
 function formatAmmo(stats) {
-  if (!stats.ammoCapacity) return { value: '∞', sub: 'Sin munición finita' }
+  if (!stats.ammoCapacity) {
+    return { value: '—', sub: 'Sin armas balísticas; energía limitada por capacitor' }
+  }
+  const ballisticCount = Number(stats.ballisticWeaponCount) || 0
+  const weaponText = ballisticCount === 1 ? '1 arma balística' : `${ballisticCount} armas balísticas`
   return {
     value: `${stats.ammoRemainingPct}%`,
-    sub: `${stats.ammoRemaining}/${stats.ammoCapacity} restante · seco: ${stats.ammoDryPct}%`,
+    sub: `${stats.ammoRemaining}/${stats.ammoCapacity} proyectiles · ${weaponText} · seco: ${stats.ammoDryPct}%`,
   }
+}
+
+function formatPowerPlant(stats) {
+  const ratio = Number(stats.powerPlantEnergyRatio) || 1
+  return `soporte planta ${ratio.toFixed(2)}x`
+}
+
+function loadoutName(ship) {
+  return ship.currentLoadout?.id === 'custom' ? 'Personalizadas' : 'Base de nave'
+}
+
+function formatLoadoutWeapons(ship) {
+  const weapons = ship.currentLoadout?.weapons ?? ship.weapons ?? []
+  if (weapons.length === 0) return 'Sin armamento definido'
+  return weapons.join(' · ')
+}
+
+function formatComponentLoadout(ship) {
+  const components = ship.componentLoadoutSummary ?? []
+  if (components.length === 0) return 'Componentes base de la nave'
+  return components.map(component => `${component.label}: ${component.name}`).join(' · ')
 }
 
 export function ResultsPanel({ result, onReset }) {
@@ -137,6 +162,16 @@ export function ResultsPanel({ result, onReset }) {
             sub="Rango efectivo"
           />
           <ShipMetricRow
+            label="Armas"
+            value={loadoutName(shipA)}
+            sub={formatLoadoutWeapons(shipA)}
+          />
+          <ShipMetricRow
+            label="Componentes"
+            value={(shipA.componentLoadoutSummary ?? []).length > 0 ? 'Personalizados' : 'Base de nave'}
+            sub={formatComponentLoadout(shipA)}
+          />
+          <ShipMetricRow
             label="DPS efectivo"
             value={stats.a.effectiveDps}
             sub={`Teórico sim: ${stats.a.theoreticalDps} · raw armas: ${stats.a.rawWeaponDps}`}
@@ -144,10 +179,10 @@ export function ResultsPanel({ result, onReset }) {
           <ShipMetricRow
             label="Banco de armas"
             value={stats.a.weaponCapCapacity}
-            sub={`${sourceLabel(stats.a.weaponDataSource)} · ${stats.a.weaponCount} armas · recarga ${stats.a.weaponCapRegen}/s · consumo ${stats.a.weaponCapDrain}/s`}
+            sub={`${sourceLabel(stats.a.weaponDataSource)} · ${stats.a.weaponCount} armas · ${formatPowerPlant(stats.a)} · recarga ${stats.a.weaponCapRegen}/s · consumo ${stats.a.weaponCapDrain}/s`}
           />
           <ShipMetricRow
-            label="Munición"
+            label="Munición balística"
             value={ammoA.value}
             sub={ammoA.sub}
           />
@@ -165,6 +200,11 @@ export function ResultsPanel({ result, onReset }) {
             label="Daño infligido"
             value={stats.a.totalDmgDealt}
             sub={`${formatDamageTypes(stats.a.damageByType)} · escudo ${stats.a.shieldDmgDealt} · casco ${stats.a.hullDmgDealt}`}
+          />
+          <ShipMetricRow
+            label="Blindaje casco"
+            value={`${stats.a.hullArmorPct}%`}
+            sub="Mitigación base antes de penetración"
           />
           <ShipMetricRow
             label="Ventana de fuego"
@@ -190,6 +230,16 @@ export function ResultsPanel({ result, onReset }) {
             sub="Rango efectivo"
           />
           <ShipMetricRow
+            label="Armas"
+            value={loadoutName(shipB)}
+            sub={formatLoadoutWeapons(shipB)}
+          />
+          <ShipMetricRow
+            label="Componentes"
+            value={(shipB.componentLoadoutSummary ?? []).length > 0 ? 'Personalizados' : 'Base de nave'}
+            sub={formatComponentLoadout(shipB)}
+          />
+          <ShipMetricRow
             label="DPS efectivo"
             value={stats.b.effectiveDps}
             sub={`Teórico sim: ${stats.b.theoreticalDps} · raw armas: ${stats.b.rawWeaponDps}`}
@@ -197,10 +247,10 @@ export function ResultsPanel({ result, onReset }) {
           <ShipMetricRow
             label="Banco de armas"
             value={stats.b.weaponCapCapacity}
-            sub={`${sourceLabel(stats.b.weaponDataSource)} · ${stats.b.weaponCount} armas · recarga ${stats.b.weaponCapRegen}/s · consumo ${stats.b.weaponCapDrain}/s`}
+            sub={`${sourceLabel(stats.b.weaponDataSource)} · ${stats.b.weaponCount} armas · ${formatPowerPlant(stats.b)} · recarga ${stats.b.weaponCapRegen}/s · consumo ${stats.b.weaponCapDrain}/s`}
           />
           <ShipMetricRow
-            label="Munición"
+            label="Munición balística"
             value={ammoB.value}
             sub={ammoB.sub}
           />
@@ -218,6 +268,11 @@ export function ResultsPanel({ result, onReset }) {
             label="Daño infligido"
             value={stats.b.totalDmgDealt}
             sub={`${formatDamageTypes(stats.b.damageByType)} · escudo ${stats.b.shieldDmgDealt} · casco ${stats.b.hullDmgDealt}`}
+          />
+          <ShipMetricRow
+            label="Blindaje casco"
+            value={`${stats.b.hullArmorPct}%`}
+            sub="Mitigación base antes de penetración"
           />
           <ShipMetricRow
             label="Ventana de fuego"

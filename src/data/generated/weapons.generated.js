@@ -2,7 +2,7 @@
  * Catálogo generado de armas de Star Citizen.
  *
  * Fuente: Star Citizen Wiki API.
- * Generado: 2026-05-11T13:24:58.230Z
+ * Generado: 2026-05-11T22:01:04.804Z
  * Version datos: 4.7.2-LIVE.11674325
  *
  * No editar a mano. Para actualizarlo ejecuta `npm run sync:sc-data`.
@@ -23,6 +23,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "physical": 72.99
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.64,
+      "nearRadius": 0.13,
+      "farRadius": 0.26
     },
     "power": 0.1,
     "emMax": 37.5,
@@ -50,6 +56,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 109.26
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.95,
+      "nearRadius": 0.25,
+      "farRadius": 0.5
+    },
     "power": 0.1,
     "emMax": 37.5,
     "health": 2850,
@@ -76,6 +88,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 48.6
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.98,
+      "nearRadius": 0.1,
+      "farRadius": 0.2
+    },
     "power": 0.1,
     "emMax": 37.5,
     "health": 850,
@@ -101,6 +119,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 0.001,
       "distortion": 720
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.68,
+      "nearRadius": 0.08,
+      "farRadius": 0.17
     },
     "power": 1.4,
     "emMax": 578,
@@ -130,6 +154,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 84.4
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.2,
+      "nearRadius": 0.11,
+      "farRadius": 0.22
+    },
     "power": 0.1,
     "emMax": 36,
     "health": 1650,
@@ -155,6 +185,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.792,
     "damageTypes": {
       "physical": 126.5
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3.3,
+      "nearRadius": 0.17,
+      "farRadius": 0.33
     },
     "power": 0.1,
     "emMax": 36,
@@ -182,6 +218,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 189.9
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 5.5,
+      "nearRadius": 0.28,
+      "farRadius": 0.55
+    },
     "power": 0.1,
     "emMax": 36,
     "health": 1650,
@@ -206,6 +248,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.3,
     "damageTypes": {
       "energy": 73.2
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.3,
+      "nearRadius": 0.02,
+      "farRadius": 0.03
     },
     "power": 0.45,
     "emMax": 167,
@@ -234,6 +282,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 109.7
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
+    },
     "power": 0.6,
     "emMax": 223,
     "health": 850,
@@ -260,6 +314,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.3,
     "damageTypes": {
       "energy": 151.6
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.75,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
     },
     "power": 0.75,
     "emMax": 278,
@@ -288,6 +348,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 66.51
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.3,
+      "nearRadius": 0.02,
+      "farRadius": 0.03
+    },
     "power": 0.45,
     "emMax": 167,
     "health": 524,
@@ -314,6 +380,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 99.72
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
     },
     "power": 0.6,
     "emMax": 223,
@@ -342,6 +414,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 134.784
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.75,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
+    },
     "power": 0.75,
     "emMax": 278,
     "health": 1024,
@@ -368,6 +446,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 202.176
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1,
+      "nearRadius": 0.05,
+      "farRadius": 0.1
     },
     "power": 0.9,
     "emMax": 334,
@@ -396,6 +480,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 150
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1,
+      "nearRadius": 0.05,
+      "farRadius": 0.1
+    },
     "power": 0.9,
     "emMax": 334,
     "health": 1650,
@@ -422,6 +512,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 336.78
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.5,
+      "nearRadius": 0.08,
+      "farRadius": 0.15
     },
     "power": 1.05,
     "emMax": 390,
@@ -450,6 +546,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 505.35
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.5,
+      "nearRadius": 0.13,
+      "farRadius": 0.25
+    },
     "power": 1.2,
     "emMax": 446,
     "health": 4224,
@@ -477,6 +579,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "distortion": 27
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.56,
+      "nearRadius": 0.03,
+      "farRadius": 0.06
+    },
     "power": 0.6,
     "emMax": 243,
     "health": 850,
@@ -503,6 +611,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.55,
     "damageTypes": {
       "energy": 85
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1,
+      "nearRadius": 0.05,
+      "farRadius": 0.1
     },
     "power": 1.2,
     "emMax": 0,
@@ -532,6 +646,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 52
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.2,
+      "nearRadius": 0.11,
+      "farRadius": 0.22
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 1800,
@@ -557,6 +677,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.57,
     "damageTypes": {
       "physical": 54
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.88,
+      "nearRadius": 0.04,
+      "farRadius": 0.09
     },
     "power": 0.1,
     "emMax": 40.5,
@@ -584,6 +710,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 325
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 6.6,
+      "nearRadius": 0.33,
+      "farRadius": 0.66
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 1650,
@@ -608,6 +740,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 17.496
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.3,
+      "nearRadius": 0.02,
+      "farRadius": 0.03
     },
     "power": 0.45,
     "emMax": 152,
@@ -636,6 +774,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 17.496
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.3,
+      "nearRadius": 0.02,
+      "farRadius": 0.03
+    },
     "power": 0.45,
     "emMax": 152,
     "health": 525,
@@ -663,6 +807,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 11.3
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.3,
+      "nearRadius": 0.02,
+      "farRadius": 0.03
+    },
     "power": 0.45,
     "emMax": 152,
     "health": 525,
@@ -687,6 +837,9 @@ export const REAL_WEAPON_CATALOG = {
     "speed": 0,
     "range": 0,
     "spreadMax": 0.6,
+    "penetration": {
+      "thickness": 0
+    },
     "power": 0.6,
     "emMax": 223,
     "health": 850,
@@ -713,6 +866,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 26.244
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
     },
     "power": 0.502,
     "emMax": 169,
@@ -741,6 +900,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 26.244
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
+    },
     "power": 0.6,
     "emMax": 203,
     "health": 850,
@@ -767,6 +932,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 26.244
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
     },
     "power": 0.6,
     "emMax": 203,
@@ -795,6 +966,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 43.65
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.75,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
+    },
     "power": 1,
     "emMax": 0,
     "health": 1500,
@@ -821,6 +998,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 43.65
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.75,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
     },
     "power": 1,
     "emMax": 0,
@@ -849,6 +1032,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 65.43
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1,
+      "nearRadius": 0.05,
+      "farRadius": 0.1
+    },
     "power": 0.9,
     "emMax": 304,
     "health": 1650,
@@ -875,6 +1064,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 65.43
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1,
+      "nearRadius": 0.05,
+      "farRadius": 0.1
     },
     "power": 0.9,
     "emMax": 304,
@@ -903,6 +1098,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 98.19
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.5,
+      "nearRadius": 0.08,
+      "farRadius": 0.15
+    },
     "power": 1.05,
     "emMax": 354,
     "health": 2640,
@@ -929,6 +1130,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 750
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.5,
+      "nearRadius": 0.08,
+      "farRadius": 0.15
     },
     "power": 1.05,
     "emMax": 354,
@@ -957,6 +1164,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 98.19
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.5,
+      "nearRadius": 0.08,
+      "farRadius": 0.15
+    },
     "power": 1.05,
     "emMax": 354,
     "health": 2640,
@@ -984,6 +1197,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 98.19
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.5,
+      "nearRadius": 0.08,
+      "farRadius": 0.15
+    },
     "power": 1.05,
     "emMax": 354,
     "capacitorAmmo": 75,
@@ -1009,6 +1228,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 147.33
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.5,
+      "nearRadius": 0.13,
+      "farRadius": 0.25
     },
     "power": 1.2,
     "emMax": 405,
@@ -1036,6 +1261,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 147.33
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.5,
+      "nearRadius": 0.13,
+      "farRadius": 0.25
     },
     "power": 1.2,
     "emMax": 405,
@@ -1065,6 +1296,12 @@ export const REAL_WEAPON_CATALOG = {
       "energy": 0.001,
       "distortion": 1040
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.8,
+      "nearRadius": 0.14,
+      "farRadius": 0.28
+    },
     "power": 1.6,
     "emMax": 660,
     "health": 4224,
@@ -1093,6 +1330,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 4000
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 23.1,
+      "nearRadius": 1.16,
+      "farRadius": 2.31
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 6750,
@@ -1118,6 +1361,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "physical": 162
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.64,
+      "nearRadius": 0.13,
+      "farRadius": 0.26
     },
     "power": 0.1,
     "emMax": 49.5,
@@ -1145,6 +1394,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 202.5
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.98,
+      "nearRadius": 0.1,
+      "farRadius": 0.2
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 550,
@@ -1170,6 +1425,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "physical": 303.3
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.64,
+      "nearRadius": 0.13,
+      "farRadius": 0.26
     },
     "power": 0.1,
     "emMax": 41.3,
@@ -1197,6 +1458,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 455.4
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.95,
+      "nearRadius": 0.25,
+      "farRadius": 0.5
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 550,
@@ -1222,6 +1489,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "physical": 683.1
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 6.6,
+      "nearRadius": 0.33,
+      "farRadius": 0.66
     },
     "power": 0.1,
     "emMax": 41.3,
@@ -1249,6 +1522,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 1024.2
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 9.9,
+      "nearRadius": 0.5,
+      "farRadius": 0.99
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 550,
@@ -1274,6 +1553,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "physical": 1537.2
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 16.5,
+      "nearRadius": 0.83,
+      "farRadius": 1.65
     },
     "power": 0.1,
     "emMax": 41.3,
@@ -1301,6 +1586,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 288320
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 50.4,
+      "nearRadius": 2.52,
+      "farRadius": 5.04
+    },
     "power": 4.8,
     "emMax": 0,
     "health": 727680,
@@ -1327,6 +1618,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 288320
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 50.4,
+      "nearRadius": 2.52,
+      "farRadius": 5.04
+    },
     "power": 4.8,
     "emMax": 0,
     "health": 727680,
@@ -1351,6 +1648,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 4,
     "damageTypes": {
       "energy": 504
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.24,
+      "nearRadius": 0.01,
+      "farRadius": 0.02
     },
     "power": 0.6,
     "emMax": 248,
@@ -1379,6 +1682,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 792
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.32,
+      "nearRadius": 0.02,
+      "farRadius": 0.03
+    },
     "power": 0.8,
     "emMax": 330,
     "health": 1550,
@@ -1405,6 +1714,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 4,
     "damageTypes": {
       "energy": 1116
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.6,
+      "nearRadius": 0.03,
+      "farRadius": 0.06
     },
     "power": 1,
     "emMax": 413,
@@ -1433,6 +1748,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "distortion": 25.7
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.42,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
+    },
     "power": 0.45,
     "emMax": 167,
     "health": 525,
@@ -1460,6 +1781,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "distortion": 38.5
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.56,
+      "nearRadius": 0.03,
+      "farRadius": 0.06
+    },
     "power": 0.6,
     "emMax": 223,
     "health": 850,
@@ -1486,6 +1813,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "distortion": 57.9
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.05,
+      "nearRadius": 0.05,
+      "farRadius": 0.11
     },
     "power": 0.75,
     "emMax": 278,
@@ -1515,6 +1848,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 142.4
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 5.5,
+      "nearRadius": 0.28,
+      "farRadius": 0.55
+    },
     "power": 0.1,
     "emMax": 33,
     "health": 4224,
@@ -1540,6 +1879,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "distortion": 81
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.68,
+      "nearRadius": 0.08,
+      "farRadius": 0.17
+    },
     "power": 1.2,
     "emMax": 594,
     "health": 550,
@@ -1563,6 +1908,9 @@ export const REAL_WEAPON_CATALOG = {
     "rpm": 0,
     "speed": 700,
     "range": 4000,
+    "penetration": {
+      "thickness": 0
+    },
     "power": 1,
     "emMax": 0,
     "health": 750000,
@@ -1587,6 +1935,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 49.248
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
     },
     "power": 0.9,
     "emMax": 408,
@@ -1615,6 +1969,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 74.034
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
+    },
     "power": 1.2,
     "emMax": 545,
     "health": 850,
@@ -1641,6 +2001,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 110.808
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
     },
     "power": 1.5,
     "emMax": 681,
@@ -1669,6 +2035,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 25000
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 6,
+      "nearRadius": 0.3,
+      "farRadius": 0.6
+    },
     "power": 1.8,
     "emMax": 729,
     "health": 20000,
@@ -1695,6 +2067,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 25000
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 6,
+      "nearRadius": 0.3,
+      "farRadius": 0.6
     },
     "power": 1.8,
     "emMax": 729,
@@ -1723,6 +2101,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 1705.5
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 6,
+      "nearRadius": 0.3,
+      "farRadius": 0.6
+    },
     "power": 1.8,
     "emMax": 729,
     "health": 20000,
@@ -1749,6 +2133,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 99.72
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
     },
     "power": 0.713,
     "emMax": 289,
@@ -1778,6 +2168,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 374.4
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.528,
+      "nearRadius": 0.03,
+      "farRadius": 0.05
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 1550,
@@ -1803,6 +2199,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 4,
     "damageTypes": {
       "physical": 374.4
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.528,
+      "nearRadius": 0.03,
+      "farRadius": 0.05
     },
     "power": 0.1,
     "emMax": 41.3,
@@ -1830,6 +2232,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 560
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.704,
+      "nearRadius": 0.04,
+      "farRadius": 0.07
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 1550,
@@ -1856,6 +2264,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 560
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.704,
+      "nearRadius": 0.04,
+      "farRadius": 0.07
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 1550,
@@ -1880,6 +2294,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 182.25
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
     },
     "power": 0.704,
     "emMax": 348,
@@ -1908,6 +2328,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 273.375
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
+    },
     "power": 1,
     "emMax": 495,
     "health": 850,
@@ -1935,6 +2361,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 410.184
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
+    },
     "power": 1.3,
     "emMax": 644,
     "health": 1024,
@@ -1961,6 +2393,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.6,
     "damageTypes": {
       "energy": 26.244
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
     },
     "power": 0.6,
     "emMax": 203,
@@ -1990,6 +2428,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 1600
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 9.9,
+      "nearRadius": 0.5,
+      "farRadius": 0.99
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 2500,
@@ -2014,6 +2458,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 49.248
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
     },
     "power": 0.9,
     "emMax": 371,
@@ -2042,6 +2492,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 74.034
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
+    },
     "power": 1.2,
     "emMax": 495,
     "health": 550,
@@ -2068,6 +2524,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 110.808
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
     },
     "power": 1.5,
     "emMax": 619,
@@ -2096,6 +2558,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 166.212
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3,
+      "nearRadius": 0.15,
+      "farRadius": 0.3
+    },
     "power": 1.8,
     "emMax": 743,
     "health": 550,
@@ -2122,6 +2590,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 248.67
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.5,
+      "nearRadius": 0.23,
+      "farRadius": 0.45
     },
     "power": 2.1,
     "emMax": 866,
@@ -2150,6 +2624,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 374.139
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 7.5,
+      "nearRadius": 0.38,
+      "farRadius": 0.75
+    },
     "power": 2.4,
     "emMax": 990,
     "health": 550,
@@ -2176,6 +2656,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.1,
     "damageTypes": {
       "energy": 10
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.3,
+      "nearRadius": 0.02,
+      "farRadius": 0.03
     },
     "power": 0.352,
     "emMax": 143,
@@ -2204,6 +2690,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 182.25
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
+    },
     "power": 0.704,
     "emMax": 348,
     "health": 550,
@@ -2230,6 +2722,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 182.25
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
     },
     "power": 0.704,
     "emMax": 348,
@@ -2258,6 +2756,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 273.375
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
+    },
     "power": 1,
     "emMax": 495,
     "health": 850,
@@ -2284,6 +2788,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 273.375
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
     },
     "power": 1,
     "emMax": 495,
@@ -2312,6 +2822,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 410.184
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
+    },
     "power": 1.3,
     "emMax": 644,
     "health": 1024,
@@ -2338,6 +2854,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 410.184
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
     },
     "power": 1.3,
     "emMax": 644,
@@ -2366,6 +2888,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 615.276
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3,
+      "nearRadius": 0.15,
+      "farRadius": 0.3
+    },
     "power": 1.6,
     "emMax": 792,
     "health": 2000,
@@ -2392,6 +2920,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 921.78
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.5,
+      "nearRadius": 0.23,
+      "farRadius": 0.45
     },
     "power": 1.9,
     "emMax": 941,
@@ -2420,6 +2954,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 1383.48
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 7.5,
+      "nearRadius": 0.38,
+      "farRadius": 0.75
+    },
     "power": 2.2,
     "emMax": 1090,
     "health": 4224,
@@ -2447,6 +2987,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 1383.48
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 7.5,
+      "nearRadius": 0.38,
+      "farRadius": 0.75
+    },
     "power": 2.2,
     "emMax": 1090,
     "health": 4224,
@@ -2473,6 +3019,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 900
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 7.5,
+      "nearRadius": 0.38,
+      "farRadius": 0.75
     },
     "power": 2.2,
     "emMax": 1090,
@@ -2502,6 +3054,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 2306.34
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 23.1,
+      "nearRadius": 1.16,
+      "farRadius": 2.31
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 6750,
@@ -2526,6 +3084,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 4670.46
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 15,
+      "nearRadius": 0.75,
+      "farRadius": 1.5
     },
     "power": 3.1,
     "emMax": 1530,
@@ -2553,6 +3117,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 4670.46
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 15,
+      "nearRadius": 0.75,
+      "farRadius": 1.5
     },
     "power": 3.1,
     "emMax": 1530,
@@ -2582,6 +3152,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 200000
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 63,
+      "nearRadius": 3.15,
+      "farRadius": 6.3
+    },
     "power": 5.6,
     "emMax": 3020,
     "health": 708660,
@@ -2603,6 +3179,9 @@ export const REAL_WEAPON_CATALOG = {
     "rpm": 90,
     "speed": 0,
     "range": 0,
+    "penetration": {
+      "thickness": 0
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 6750,
@@ -2625,6 +3204,9 @@ export const REAL_WEAPON_CATALOG = {
     "speed": 0,
     "range": 0,
     "spreadMax": 0.4,
+    "penetration": {
+      "thickness": 0
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 6750,
@@ -2649,6 +3231,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 2075.706
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 10.5,
+      "nearRadius": 0.53,
+      "farRadius": 1.05
     },
     "power": 2.5,
     "emMax": 1240,
@@ -2677,6 +3265,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 6750
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 10.5,
+      "nearRadius": 0.53,
+      "farRadius": 1.05
+    },
     "power": 2.5,
     "emMax": 1240,
     "health": 100000,
@@ -2701,6 +3295,12 @@ export const REAL_WEAPON_CATALOG = {
     "speed": 672,
     "range": 3998,
     "spreadMax": 0.4,
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 10.5,
+      "nearRadius": 0.53,
+      "farRadius": 1.05
+    },
     "power": 2.5,
     "emMax": 1240,
     "health": 100000,
@@ -2727,6 +3327,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 2075.706
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 10.5,
+      "nearRadius": 0.53,
+      "farRadius": 1.05
     },
     "power": 2.5,
     "emMax": 1240,
@@ -2755,6 +3361,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 14040
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 10.5,
+      "nearRadius": 0.53,
+      "farRadius": 1.05
+    },
     "power": 2.5,
     "emMax": 1240,
     "health": 6750,
@@ -2781,6 +3393,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 3113.64
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 13.5,
+      "nearRadius": 0.68,
+      "farRadius": 1.35
     },
     "power": 2.8,
     "emMax": 1390,
@@ -2810,6 +3428,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 19
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.65,
+      "nearRadius": 0.08,
+      "farRadius": 0.17
+    },
     "power": 0.1,
     "emMax": 36,
     "health": 1500,
@@ -2835,6 +3459,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.3,
     "damageTypes": {
       "physical": 3400
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 9.9,
+      "nearRadius": 0.5,
+      "farRadius": 0.99
     },
     "power": 0.1,
     "emMax": 0,
@@ -2862,6 +3492,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 18
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.66,
+      "nearRadius": 0.03,
+      "farRadius": 0.07
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 850,
@@ -2886,6 +3522,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 272.97
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
     },
     "power": 1.43,
     "emMax": 708,
@@ -2914,6 +3556,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 37.98
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.6,
+      "nearRadius": 0.03,
+      "farRadius": 0.06
+    },
     "power": 0.45,
     "emMax": 138,
     "health": 525,
@@ -2940,6 +3588,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.55,
     "damageTypes": {
       "energy": 56.97
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.8,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
     },
     "power": 0.6,
     "emMax": 184,
@@ -2968,6 +3622,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 85.5
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.5,
+      "nearRadius": 0.08,
+      "farRadius": 0.15
+    },
     "power": 0.75,
     "emMax": 230,
     "health": 1024,
@@ -2994,6 +3654,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "energy": 101.2
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.28,
+      "nearRadius": 0.05,
+      "farRadius": 0.07
     },
     "power": 0.6,
     "emMax": 205,
@@ -3022,6 +3688,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 152.8
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.34,
+      "nearRadius": 0.06,
+      "farRadius": 0.08
+    },
     "power": 0.8,
     "emMax": 273,
     "health": 850,
@@ -3048,6 +3720,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "energy": 220.7
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.6,
+      "nearRadius": 0.09,
+      "farRadius": 0.12
     },
     "power": 1,
     "emMax": 341,
@@ -3077,6 +3755,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 162.5
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3.3,
+      "nearRadius": 0.17,
+      "farRadius": 0.33
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 4224,
@@ -3101,6 +3785,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "energy": 97.2
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
     },
     "power": 0.9,
     "emMax": 446,
@@ -3129,6 +3819,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 218.7
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
+    },
     "power": 1.5,
     "emMax": 743,
     "health": 1024,
@@ -3155,6 +3851,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "energy": 145.8
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
     },
     "power": 1.2,
     "emMax": 594,
@@ -3183,6 +3885,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 327.888
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3,
+      "nearRadius": 0.15,
+      "farRadius": 0.3
+    },
     "power": 1.3,
     "emMax": 0,
     "health": 1650,
@@ -3209,6 +3917,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "energy": 492.156
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.5,
+      "nearRadius": 0.23,
+      "farRadius": 0.45
     },
     "power": 2.1,
     "emMax": 1040,
@@ -3237,6 +3951,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 738.396
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 7.5,
+      "nearRadius": 0.38,
+      "farRadius": 0.75
+    },
     "power": 2.4,
     "emMax": 1190,
     "health": 4224,
@@ -3263,6 +3983,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 8
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
     },
     "power": 1,
     "emMax": 0,
@@ -3291,6 +4017,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 156.923
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
+    },
     "power": 0.25,
     "emMax": 545,
     "health": 800,
@@ -3317,6 +4049,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "energy": 185.455
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3,
+      "nearRadius": 0.15,
+      "farRadius": 0.3
     },
     "power": 0.25,
     "emMax": 817,
@@ -3346,6 +4084,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 355
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.528,
+      "nearRadius": 0.03,
+      "farRadius": 0.05
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 1550,
@@ -3371,6 +4115,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 4,
     "damageTypes": {
       "physical": 840
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.32,
+      "nearRadius": 0.07,
+      "farRadius": 0.13
     },
     "power": 0.1,
     "emMax": 41.3,
@@ -3398,6 +4148,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 840
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.32,
+      "nearRadius": 0.07,
+      "farRadius": 0.13
+    },
     "power": 0.1,
     "emMax": 41.3,
     "health": 1550,
@@ -3422,6 +4178,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 4,
     "damageTypes": {
       "energy": 416
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.6,
+      "nearRadius": 0.03,
+      "farRadius": 0.06
     },
     "power": 1,
     "emMax": 450,
@@ -3450,6 +4212,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 396
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.6,
+      "nearRadius": 0.03,
+      "farRadius": 0.06
+    },
     "power": 1,
     "emMax": 450,
     "health": 1550,
@@ -3477,6 +4245,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 218.7
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
+    },
     "power": 1.73,
     "emMax": 649,
     "health": 2850,
@@ -3503,6 +4277,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 350
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.75,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
     },
     "power": 0.863,
     "emMax": 320,
@@ -3532,6 +4312,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 63
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.2,
+      "nearRadius": 0.11,
+      "farRadius": 0.22
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 2000,
@@ -3557,6 +4343,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.518,
     "damageTypes": {
       "physical": 52.7
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.88,
+      "nearRadius": 0.04,
+      "farRadius": 0.09
     },
     "power": 0.1,
     "emMax": 30,
@@ -3584,6 +4376,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 63.3
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.2,
+      "nearRadius": 0.11,
+      "farRadius": 0.22
+    },
     "power": 0.1,
     "emMax": 33,
     "health": 1650,
@@ -3609,6 +4407,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.525,
     "damageTypes": {
       "physical": 63.3
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.2,
+      "nearRadius": 0.11,
+      "farRadius": 0.22
     },
     "power": 0.1,
     "emMax": 33,
@@ -3636,6 +4440,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 189.9
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 5.5,
+      "nearRadius": 0.28,
+      "farRadius": 0.55
+    },
     "power": 0.1,
     "emMax": 36,
     "health": 16500,
@@ -3662,6 +4472,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 5400
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 29.7,
+      "nearRadius": 1.49,
+      "farRadius": 2.97
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 30000,
@@ -3687,6 +4503,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 0.001,
       "distortion": 480
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.12,
+      "nearRadius": 0.06,
+      "farRadius": 0.11
     },
     "power": 1.2,
     "emMax": 495,
@@ -3716,6 +4538,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 12.7
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.88,
+      "nearRadius": 0.04,
+      "farRadius": 0.09
+    },
     "power": 0.1,
     "emMax": 36,
     "health": 850,
@@ -3741,6 +4569,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.655,
     "damageTypes": {
       "physical": 292
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 7.7,
+      "nearRadius": 0.39,
+      "farRadius": 0.77
     },
     "power": 0.1,
     "emMax": 36,
@@ -3768,6 +4602,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 292
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 7.7,
+      "nearRadius": 0.39,
+      "farRadius": 0.77
+    },
     "power": 0.1,
     "emMax": 36,
     "health": 6750,
@@ -3792,6 +4632,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "energy": 5150
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 10.5,
+      "nearRadius": 0.53,
+      "farRadius": 1.05
     },
     "power": 2.93,
     "emMax": 1450,
@@ -3820,6 +4666,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 5150
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 10.5,
+      "nearRadius": 0.53,
+      "farRadius": 1.05
+    },
     "power": 2.93,
     "emMax": 1450,
     "health": 6750,
@@ -3846,6 +4698,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.1,
     "damageTypes": {
       "energy": 202.5
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.05,
+      "nearRadius": 0.05,
+      "farRadius": 0.11
     },
     "power": 1.2,
     "emMax": 594,
@@ -3874,6 +4732,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 472.5
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.4,
+      "nearRadius": 0.07,
+      "farRadius": 0.14
+    },
     "power": 1.6,
     "emMax": 792,
     "health": 850,
@@ -3900,6 +4764,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.1,
     "damageTypes": {
       "energy": 1012.5
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.625,
+      "nearRadius": 0.13,
+      "farRadius": 0.26
     },
     "power": 2,
     "emMax": 990,
@@ -3929,6 +4799,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 18500
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 9.9,
+      "nearRadius": 0.5,
+      "farRadius": 0.99
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 20000,
@@ -3954,6 +4830,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "physical": 32000
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 11.55,
+      "nearRadius": 0.58,
+      "farRadius": 1.16
     },
     "power": 0.1,
     "emMax": 49.5,
@@ -3981,6 +4863,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 225
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.52,
+      "nearRadius": 0.13,
+      "farRadius": 0.25
+    },
     "power": 1.2,
     "emMax": 540,
     "health": 1050,
@@ -4006,6 +4894,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.2,
     "damageTypes": {
       "physical": 525
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3.36,
+      "nearRadius": 0.17,
+      "farRadius": 0.34
     },
     "power": 1.6,
     "emMax": 720,
@@ -4033,6 +4927,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 1125
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 6.3,
+      "nearRadius": 0.32,
+      "farRadius": 0.63
+    },
     "power": 2,
     "emMax": 900,
     "health": 3050,
@@ -4059,6 +4959,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 525
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3.36,
+      "nearRadius": 0.17,
+      "farRadius": 0.34
+    },
     "power": 1.6,
     "emMax": 792,
     "health": 1050,
@@ -4083,6 +4989,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "distortion": 81
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.26,
+      "nearRadius": 0.06,
+      "farRadius": 0.13
     },
     "power": 0.9,
     "emMax": 408,
@@ -4111,6 +5023,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "distortion": 121.5
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.68,
+      "nearRadius": 0.08,
+      "farRadius": 0.17
+    },
     "power": 1.2,
     "emMax": 545,
     "health": 850,
@@ -4137,6 +5055,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "distortion": 182.52
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 3.15,
+      "nearRadius": 0.16,
+      "farRadius": 0.32
     },
     "power": 1.5,
     "emMax": 681,
@@ -4166,6 +5090,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 36
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.66,
+      "nearRadius": 0.03,
+      "farRadius": 0.07
+    },
     "power": 0.1,
     "emMax": 40.5,
     "health": 525,
@@ -4191,6 +5121,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.57,
     "damageTypes": {
       "physical": 54
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.88,
+      "nearRadius": 0.04,
+      "farRadius": 0.09
     },
     "power": 0.1,
     "emMax": 40.5,
@@ -4218,6 +5154,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 81
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.65,
+      "nearRadius": 0.08,
+      "farRadius": 0.17
+    },
     "power": 0.1,
     "emMax": 40.5,
     "health": 1024,
@@ -4243,6 +5185,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "physical": 60.75
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.98,
+      "nearRadius": 0.1,
+      "farRadius": 0.2
     },
     "power": 0.1,
     "emMax": 49.5,
@@ -4270,6 +5218,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 91.26
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.64,
+      "nearRadius": 0.13,
+      "farRadius": 0.26
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 850,
@@ -4295,6 +5249,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.4,
     "damageTypes": {
       "physical": 2562.6
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 23.1,
+      "nearRadius": 1.16,
+      "farRadius": 2.31
     },
     "power": 0.1,
     "emMax": 49.5,
@@ -4322,6 +5282,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 3844.2
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 29.7,
+      "nearRadius": 1.49,
+      "farRadius": 2.97
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 10240,
@@ -4348,6 +5314,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 136.62
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.95,
+      "nearRadius": 0.25,
+      "farRadius": 0.5
+    },
     "power": 0.1,
     "emMax": 49.5,
     "health": 1024,
@@ -4372,6 +5344,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.518,
     "damageTypes": {
       "energy": 17.1
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.4,
+      "nearRadius": 0.02,
+      "farRadius": 0.04
     },
     "power": 0.335,
     "emMax": 111,
@@ -4401,6 +5379,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 52.7
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.88,
+      "nearRadius": 0.04,
+      "farRadius": 0.09
+    },
     "power": 0.1,
     "emMax": 0,
     "health": 1500,
@@ -4425,6 +5409,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.62,
     "damageTypes": {
       "energy": 39.5
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.75,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
     },
     "power": 1,
     "emMax": 0,
@@ -4453,6 +5443,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 567
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.4,
+      "nearRadius": 0.12,
+      "farRadius": 0.24
+    },
     "power": 1.4,
     "emMax": 578,
     "health": 2640,
@@ -4479,6 +5475,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 526.5
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 2.25,
+      "nearRadius": 0.11,
+      "farRadius": 0.23
     },
     "power": 1.5,
     "emMax": 681,
@@ -4507,6 +5509,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 89.1
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
+    },
     "power": 1.2,
     "emMax": 545,
     "health": 850,
@@ -4533,6 +5541,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.5,
     "damageTypes": {
       "energy": 72.9
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.9,
+      "nearRadius": 0.05,
+      "farRadius": 0.09
     },
     "power": 1.13,
     "emMax": 513,
@@ -4561,6 +5575,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 273.132
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 1.2,
+      "nearRadius": 0.06,
+      "farRadius": 0.12
+    },
     "power": 1.2,
     "emMax": 545,
     "health": 850,
@@ -4588,6 +5608,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 972
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.5,
+      "nearRadius": 0.23,
+      "farRadius": 0.45
+    },
     "power": 2.1,
     "emMax": 953,
     "health": 5500,
@@ -4614,6 +5640,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.45,
     "damageTypes": {
       "energy": 972
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 4.5,
+      "nearRadius": 0.23,
+      "farRadius": 0.45
     },
     "power": 2.1,
     "emMax": 953,
@@ -4643,6 +5675,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 7.56
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.66,
+      "nearRadius": 0.03,
+      "farRadius": 0.07
+    },
     "power": 0.1,
     "emMax": 36,
     "capacitorRegen": 0,
@@ -4667,6 +5705,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.54,
     "damageTypes": {
       "physical": 7.56
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.66,
+      "nearRadius": 0.03,
+      "farRadius": 0.07
     },
     "power": 0.1,
     "emMax": 36,
@@ -4693,6 +5737,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 7.56
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.66,
+      "nearRadius": 0.03,
+      "farRadius": 0.07
+    },
     "power": 0.1,
     "emMax": 36,
     "capacitorRegen": 0,
@@ -4717,6 +5767,12 @@ export const REAL_WEAPON_CATALOG = {
     "spreadMax": 0.54,
     "damageTypes": {
       "physical": 2.5
+    },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.66,
+      "nearRadius": 0.03,
+      "farRadius": 0.07
     },
     "power": 0.1,
     "emMax": 36,
@@ -4743,6 +5799,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "physical": 7.56
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.66,
+      "nearRadius": 0.03,
+      "farRadius": 0.07
+    },
     "power": 0.1,
     "emMax": 36,
     "health": 550,
@@ -4768,6 +5830,12 @@ export const REAL_WEAPON_CATALOG = {
     "damageTypes": {
       "energy": 36.45
     },
+    "penetration": {
+      "thickness": 0.5,
+      "baseDistance": 0.75,
+      "nearRadius": 0.04,
+      "farRadius": 0.08
+    },
     "power": 0.652,
     "emMax": 242,
     "health": 1024,
@@ -4787,6 +5855,6 @@ export const WEAPON_DATA_META = {
   "source": "Star Citizen Wiki API",
   "endpoint": "https://api.star-citizen.wiki/api/items?filter%5Bcategory%5D=vehicle-weapons",
   "gameVersion": "4.7.2-LIVE.11674325",
-  "syncedAt": "2026-05-11T13:24:58.230Z",
+  "syncedAt": "2026-05-11T22:01:04.804Z",
   "total": 180
 }

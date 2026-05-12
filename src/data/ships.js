@@ -2,7 +2,7 @@
  * ships.js — Datos de naves (mock)
  *
  * Fuente actual : conocimiento del juego patch 3.23/4.0
- * Fuente futura : spviewer.eu / scunpacked-data
+ * Fuentes reales : Star Citizen Wiki API (naves, armas y componentes)
  *
  * Modelo de accuracy y evasion:
  *
@@ -18,9 +18,17 @@
  *   Tamaño nave      ±0.06  (XS +0.06, S +0.04, M +0.00, L -0.04)
  */
 
+import { REAL_VEHICLE_CATALOG, VEHICLE_DATA_META } from './generated/vehicles.generated.js'
+import {
+  COMPONENT_TYPE_LABELS,
+  CONFIGURABLE_COMPONENT_TYPES,
+  componentById,
+  componentLabel,
+  componentOptionsForSlot,
+} from './components.js'
 import { WEAPON_CATALOG, WEAPON_DPS_TO_SIM_SCALE, calibratedWeaponDps, weaponMount } from './weapons.js'
 
-export const SHIPS = {
+const BASE_SHIPS = {
 
   // ─── AEGIS DYNAMICS ───────────────────────────────────────────
 
@@ -360,21 +368,242 @@ export const SHIPS = {
 
 }
 
-// ── Banco de armas (mock) ───────────────────────────────────────────
+// ── Banco de armas / loadouts ───────────────────────────────────────
 // La capacidad del capacitor/cargador depende de las armas equipadas, no del
 // escudo de la nave. Los valores se inspiran en columnas como Ammo, Burst DPS,
 // Alpha, RPM, Range, Spread, Power y EM Max.
-function withWeaponDefaults(ship) {
-  const weaponLoadout = normalizeWeaponLoadout(ship)
+export const STOCK_LOADOUT_ID = 'stock'
+export const CUSTOM_LOADOUT_ID = 'custom'
+
+const BALLISTIC_GATLING_BY_SIZE = {
+  1: 'yellowjacket_gt_210_gatling',
+  2: 'scorpion_gt_215_gatling',
+  3: 'mantis_gt_220_gatling',
+  4: 'ad4b_ballistic_gatling',
+}
+
+const BALLISTIC_CANNON_BY_SIZE = {
+  1: 'deadbolt_i_cannon',
+  2: 'deadbolt_ii_cannon',
+  3: 'deadbolt_iii_cannon',
+  4: 'deadbolt_iv_cannon',
+}
+
+const BALLISTIC_REPEATER_BY_SIZE = {
+  1: 'sw16br1_buzzsaw_repeater',
+  2: 'sw16br2_sawbuck_repeater',
+  3: 'sw16br3_shredder_repeater',
+}
+
+const LOADOUT_PRESETS = [
+  {
+    id: 'ballistic_gatling',
+    name: 'Balística Gatlings',
+    description: 'Alta cadencia, munición finita y presión constante sobre escudos.',
+    bySize: BALLISTIC_GATLING_BY_SIZE,
+  },
+  {
+    id: 'ballistic_cannon',
+    name: 'Balística Cañones',
+    description: 'Menos disparos, más alpha y mejor lectura de penetración contra casco.',
+    bySize: BALLISTIC_CANNON_BY_SIZE,
+  },
+  {
+    id: 'ballistic_repeater',
+    name: 'Balística Repetidores',
+    description: 'Compromiso entre cadencia, alpha y reserva de munición.',
+    bySize: BALLISTIC_REPEATER_BY_SIZE,
+  },
+]
+
+const SHIP_API_SLUG_OVERRIDES = {
+  rsi_aurora_mr: 'rsi-aurora-gs-mr',
+  rsi_aurora_ln: 'rsi-aurora-gs-ln',
+}
+
+const SIGNATURE_BASELINES = {
+  em: 20000,
+  ir: 8000,
+  cs: 8000,
+}
+
+function withRealVehicleDefaults(ship) {
+  const vehicle = realVehicleForShip(ship)
+  if (!vehicle) {
+    return {
+      ...ship,
+      shipDataSource: 'mock',
+      shipDataVersion: null,
+    }
+  }
+
+  const hardpoints = vehicle.hardpoints ?? ship.hardpoints
+  const stockLoadout = realStockLoadout(vehicle, ship.weaponLoadout)
+  const stockWeapons = stockLoadout.length > 0
+    ? describeLoadoutWeapons(stockLoadout)
+    : ship.weapons
+  const sigEM = normalizeSignature(vehicle.signature?.emShields ?? vehicle.emission?.emIdle, SIGNATURE_BASELINES.em)
+  const sigIR = normalizeSignature(vehicle.signature?.irShields ?? vehicle.emission?.ir, SIGNATURE_BASELINES.ir)
+  const sigCS = normalizeSignature(vehicle.crossSection?.max, SIGNATURE_BASELINES.cs)
+
+  return {
+    ...ship,
+    name: vehicle.name ?? ship.name,
+    manufacturer: vehicle.manufacturer ?? ship.manufacturer,
+    role: vehicle.role ?? ship.role,
+    size: simSizeFromVehicle(vehicle, ship.size),
+    weapons: stockWeapons,
+    weaponLoadout: stockLoadout.length > 0 ? stockLoadout : ship.weaponLoadout,
+    hardpoints,
+    hullMax: finiteRounded(vehicle.hullHp, ship.hullMax),
+    shieldMax: finiteRounded(vehicle.shieldHp, ship.shieldMax),
+    shieldRegen: finiteRounded(vehicle.shieldRegen, ship.shieldRegen),
+    speedSCM: finiteRounded(vehicle.speed?.scm, ship.speedSCM),
+    speedBoost: finiteRounded(vehicle.speed?.max, ship.speedBoost),
+    accuracy: realAccuracy(vehicle, hardpoints, ship.accuracy),
+    evasion: realEvasion(vehicle, sigCS, ship.evasion),
+    radarStrength: realRadarStrength(vehicle),
+    sigEM,
+    sigIR,
+    sigCS,
+    signatureProfile: round2(clamp(0.30, 0.42 * sigEM + 0.33 * sigIR + 0.25 * sigCS, 3.00)),
+    armorHealth: vehicle.armor?.health,
+    armorDamageMultipliers: vehicle.armor?.damageMultipliers,
+    armorResistanceMultipliers: vehicle.armor?.resistanceMultipliers,
+    armorSignalMultipliers: vehicle.armor?.signalMultipliers,
+    armorDeflection: vehicle.armor?.deflection,
+    shieldResistance: vehicle.shieldResistance,
+    shieldAbsorption: vehicle.shieldAbsorption,
+    shieldFaceType: vehicle.shieldFaceType,
+    realVehicle: vehicle,
+    shipDataSource: 'real',
+    shipDataVersion: vehicle.sourceVersion ?? VEHICLE_DATA_META.gameVersion,
+    shipSourceUrl: vehicle.sourceUrl,
+  }
+}
+
+function realVehicleForShip(ship) {
+  const slug = SHIP_API_SLUG_OVERRIDES[ship.id] ?? String(ship.id ?? '').replaceAll('_', '-')
+  return REAL_VEHICLE_CATALOG[slug] ?? null
+}
+
+function realStockLoadout(vehicle, fallback = []) {
+  const fixedWeapons = vehicle.weaponry?.fixedWeapons
+  if (!Array.isArray(fixedWeapons) || fixedWeapons.length === 0) return Array.isArray(fallback) ? fallback : []
+
+  const counts = fixedWeapons.reduce((acc, weapon) => {
+    const weaponId = catalogIdForWeaponName(weapon.name)
+    if (!weaponId) return acc
+    acc[weaponId] = (acc[weaponId] ?? 0) + 1
+    return acc
+  }, {})
+
+  const mounts = Object.entries(counts).map(([weaponId, count]) => weaponMount(weaponId, count))
+  return mounts.length > 0 ? mounts : Array.isArray(fallback) ? fallback : []
+}
+
+function catalogIdForWeaponName(name) {
+  const target = normalizeNameForMatch(name)
+  if (!target) return null
+  const match = Object.values(WEAPON_CATALOG)
+    .find(weapon => normalizeNameForMatch(weapon.name) === target)
+  return match?.id ?? null
+}
+
+function normalizeNameForMatch(name) {
+  return String(name ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[“”]/g, '"')
+    .replace(/[’]/g, "'")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function simSizeFromVehicle(vehicle, fallback) {
+  const sizeClass = Number(vehicle.sizeClass)
+  if (!Number.isFinite(sizeClass)) return fallback
+  if (sizeClass <= 1) return 'XS'
+  if (sizeClass <= 2) return 'S'
+  if (sizeClass <= 3) return 'M'
+  return 'L'
+}
+
+function normalizeSignature(value, baseline) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return 1
+  return round2(clamp(0.30, n / baseline, 3.00))
+}
+
+function finiteRounded(value, fallback) {
+  const n = Number(value)
+  return Number.isFinite(n) ? round1(n) : fallback
+}
+
+function realRadarStrength(vehicle) {
+  const radar = (vehicle.components ?? []).find(component => component.type === 'radar')
+  const sizeClass = Number(vehicle.sizeClass) || 2
+  const radarSize = componentSizeRank(radar?.componentSize ?? radar?.size)
+  return round2(clamp(0.75, 0.82 + sizeClass * 0.05 + radarSize * 0.06, 1.55))
+}
+
+function componentSizeRank(size) {
+  const s = String(size ?? '').toUpperCase()
+  if (s === 'XS') return 0.5
+  if (s === 'S') return 1
+  if (s === 'M') return 2
+  if (s === 'L') return 3
+  const n = Number(s)
+  return Number.isFinite(n) ? Math.max(0.5, n) : 1
+}
+
+function realAccuracy(vehicle, hardpoints, fallback) {
+  const pitch = Number(vehicle.agility?.pitch)
+  const yaw = Number(vehicle.agility?.yaw)
+  const turn = Number.isFinite(pitch) && Number.isFinite(yaw) ? (pitch + yaw) / 2 : 55
+  const hardpointCount = Object.values(hardpoints ?? {}).reduce((sum, count) => sum + (Number(count) || 0), 0)
+  const value = 0.58 + (turn / 80) * 0.12 + Math.min(0.06, hardpointCount * 0.01)
+  return round2(clamp(0.55, value, 0.82) || fallback)
+}
+
+function realEvasion(vehicle, sigCS, fallback) {
+  const pitch = Number(vehicle.agility?.pitch)
+  const yaw = Number(vehicle.agility?.yaw)
+  const scm = Number(vehicle.speed?.scm)
+  const turn = Number.isFinite(pitch) && Number.isFinite(yaw) ? (pitch + yaw) / 2 : 50
+  const speed = Number.isFinite(scm) ? scm : 220
+  const value = 0.12 + (turn / 80) * 0.16 + (speed / 300) * 0.10 - Math.max(0, sigCS - 0.8) * 0.05
+  return round2(clamp(0.18, value, 0.48) || fallback)
+}
+
+function withWeaponDefaults(ship, selectedLoadoutId = STOCK_LOADOUT_ID, customConfig = null) {
+  const loadoutOptions = buildLoadoutOptions(ship, customConfig)
+  const selectedLoadout = loadoutOptions.find(option => option.id === selectedLoadoutId) ?? loadoutOptions[0]
+  const shipForLoadout = { ...ship, weaponLoadout: selectedLoadout.weaponLoadout }
+  const weaponLoadout = normalizeWeaponLoadout(shipForLoadout)
   const weaponBank = calculateWeaponBank(ship, weaponLoadout)
-  const legacyDps = Number(ship.dps) || 0
+  const legacyDps = Number(ship.legacyDps ?? ship.dps) || 0
   const dps = calibratedWeaponDps(weaponBank, legacyDps)
 
   return {
     ...ship,
+    weapons: selectedLoadout.weapons,
     dps,
     legacyDps,
     dpsSource: weaponBank.dataSource,
+    currentLoadout: {
+      id: selectedLoadout.id,
+      name: selectedLoadout.name,
+      description: selectedLoadout.description,
+      weapons: selectedLoadout.weapons,
+    },
+    loadoutOptions: loadoutOptions.map(({ id, name, description, weapons }) => ({
+      id,
+      name,
+      description,
+      weapons,
+    })),
     weaponLoadout,
     weaponBank,
     weaponCapBase: weaponBank.capacity,
@@ -383,6 +612,567 @@ function withWeaponDefaults(ship) {
     weaponRangeM: weaponBank.rangeM,
     damageProfile: weaponBank.damageProfile,
   }
+}
+
+function buildLoadoutOptions(ship, customConfig = null) {
+  const stockWeaponLoadout = Array.isArray(ship.weaponLoadout) ? ship.weaponLoadout : inferWeaponLoadout(ship)
+  const stockSlots = baseWeaponSlotsForShip(ship)
+  const stock = {
+    id: STOCK_LOADOUT_ID,
+    name: 'Loadout base',
+    description: 'Configuración base cargada desde los datos de la nave.',
+    weaponLoadout: stockWeaponLoadout,
+    weapons: stockSlots.length > 0
+      ? describeWeaponSlots(stockSlots)
+      : describeLoadoutWeapons(stockWeaponLoadout),
+  }
+
+  const variants = LOADOUT_PRESETS
+    .map((preset) => {
+      const weaponLoadout = loadoutFromHardpoints(ship, preset.bySize)
+      if (!coversAllHardpoints(ship, weaponLoadout)) return null
+      return {
+        id: preset.id,
+        name: preset.name,
+        description: preset.description,
+        weaponLoadout,
+        weapons: describeLoadoutWeapons(weaponLoadout),
+      }
+    })
+    .filter(Boolean)
+
+  const custom = buildCustomWeaponLoadout(ship, customConfig)
+
+  return custom ? [stock, custom, ...variants] : [stock, ...variants]
+}
+
+function buildCustomWeaponLoadout(ship, customConfig) {
+  const selected = customConfig?.weaponsBySlot
+  if (!selected || Object.keys(selected).length === 0) return null
+
+  const slots = baseWeaponSlotsForShip(ship)
+    .map((slot) => {
+      const selectedWeapon = WEAPON_CATALOG[selected[slot.id]]
+      const selectedWeaponId = selectedWeapon && Number(selectedWeapon.size) === Number(slot.size)
+        ? selectedWeapon.id
+        : null
+      const weaponId = selectedWeaponId ?? slot.baseWeaponId
+      if (!weaponId) return null
+
+      return {
+        ...slot,
+        weaponId,
+        mount: slot.baseMount ?? 'fixed',
+      }
+    })
+    .filter(Boolean)
+
+  if (slots.length === 0) return null
+
+  const hasChanges = slots.some(slot => slot.weaponId !== slot.baseWeaponId)
+  if (!hasChanges) return null
+
+  const weaponLoadout = aggregateWeaponSlots(slots)
+
+  return {
+    id: CUSTOM_LOADOUT_ID,
+    name: 'Personalizado',
+    description: 'Armas elegidas manualmente para cada espacio compatible de la nave.',
+    weaponLoadout,
+    weapons: describeWeaponSlots(slots),
+  }
+}
+
+function baseWeaponSlotsForShip(ship) {
+  const slots = hardpointSlotsForShip(ship)
+  const stockLoadout = Array.isArray(ship.weaponLoadout) ? ship.weaponLoadout : inferWeaponLoadout(ship)
+  const stockPool = expandWeaponMounts(stockLoadout)
+
+  return slots
+    .map((slot, index) => {
+      const stockIndex = stockPool.findIndex(mount => Number(WEAPON_CATALOG[mount.weaponId]?.size) === Number(slot.size))
+      const stockMount = stockIndex >= 0 ? stockPool.splice(stockIndex, 1)[0] : null
+      const fallbackWeaponId = weaponOptionsForSize(slot.size)[0]?.id ?? null
+      const baseWeaponId = stockMount?.weaponId ?? fallbackWeaponId
+      const baseWeapon = WEAPON_CATALOG[baseWeaponId]
+
+      if (!baseWeapon) return null
+
+      return {
+        ...slot,
+        index: index + 1,
+        label: `Arma ${index + 1} · S${slot.size}`,
+        baseWeaponId,
+        baseWeaponName: baseWeapon.name,
+        baseMount: stockMount?.mount ?? 'fixed',
+        weaponId: baseWeaponId,
+        mount: stockMount?.mount ?? 'fixed',
+      }
+    })
+    .filter(Boolean)
+}
+
+function hardpointSlotsForShip(ship) {
+  let slotNumber = 0
+
+  return Object.entries(ship.hardpoints ?? {})
+    .map(([sizeKey, count]) => {
+      const size = Number(String(sizeKey).replace('S', '')) || 0
+      return {
+        size,
+        count: Math.max(1, Number(count) || 1),
+      }
+    })
+    .filter(entry => entry.size > 0)
+    .sort((a, b) => a.size - b.size)
+    .flatMap(({ size, count }) => Array.from({ length: count }).map(() => {
+      slotNumber += 1
+      return {
+        id: `weapon-${slotNumber}`,
+        size,
+      }
+    }))
+}
+
+function expandWeaponMounts(weaponLoadout) {
+  return (Array.isArray(weaponLoadout) ? weaponLoadout : [])
+    .flatMap((mount) => {
+      const count = Math.max(1, Number(mount.count) || 1)
+      return Array.from({ length: count }).map(() => ({
+        weaponId: mount.weaponId,
+        mount: mount.mount ?? 'fixed',
+      }))
+    })
+}
+
+function aggregateWeaponSlots(slots) {
+  const grouped = new Map()
+
+  slots.forEach((slot) => {
+    const key = `${slot.weaponId}|${slot.mount ?? 'fixed'}`
+    const current = grouped.get(key) ?? {
+      weaponId: slot.weaponId,
+      count: 0,
+      mount: slot.mount ?? 'fixed',
+    }
+    current.count += 1
+    grouped.set(key, current)
+  })
+
+  return Array.from(grouped.values()).map(({ weaponId, count, mount }) => weaponMount(weaponId, count, mount))
+}
+
+function loadoutFromHardpoints(ship, weaponBySize) {
+  return Object.entries(ship.hardpoints ?? {})
+    .map(([sizeKey, count]) => {
+      const size = Number(String(sizeKey).replace('S', '')) || 0
+      const weaponId = weaponBySize[size]
+      return weaponId && WEAPON_CATALOG[weaponId] ? weaponMount(weaponId, count) : null
+    })
+    .filter(Boolean)
+}
+
+function coversAllHardpoints(ship, weaponLoadout) {
+  const hardpointTypes = Object.keys(ship.hardpoints ?? {})
+  return hardpointTypes.length > 0 && weaponLoadout.length === hardpointTypes.length
+}
+
+function describeLoadoutWeapons(weaponLoadout) {
+  return weaponLoadout.map((mount) => {
+    const weapon = WEAPON_CATALOG[mount.weaponId]
+    const count = Math.max(1, Number(mount.count) || 1)
+    if (!weapon) return `${mount.weaponId} ×${count}`
+    return `${weapon.name} ×${count} (S${weapon.size})`
+  })
+}
+
+function describeWeaponSlots(slots) {
+  return slots.map((slot) => {
+    const weapon = WEAPON_CATALOG[slot.weaponId ?? slot.baseWeaponId]
+    const weaponName = weapon?.name ?? slot.weaponId ?? 'Arma'
+    const mountLabel = slot.mount === 'turret' ? ' · torreta' : ''
+    return `${slot.label}: ${weaponName}${mountLabel}`
+  })
+}
+
+export function getShipForLoadout(shipId, loadoutId = STOCK_LOADOUT_ID, customConfig = null) {
+  const baseShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(BASE_SHIPS[shipId] ?? BASE_SHIPS.aegs_gladius)))
+  const componentShip = withComponentOverrides(baseShip, customConfig)
+  const weaponShip = withWeaponDefaults(componentShip, loadoutId, customConfig)
+  const resolvedShip = withSensorDefaults(weaponShip)
+
+  return {
+    ...resolvedShip,
+    configurationSlots: buildConfigurationSlots(baseShip, customConfig),
+  }
+}
+
+function withArmorDefaults(ship) {
+  const realPhysicalMultiplier = Number(ship.armorDamageMultipliers?.physical)
+  const realEnergyMultiplier = Number(ship.armorDamageMultipliers?.energy)
+  const fallbackReduction = fallbackArmorReductionForShip(ship)
+  const armorReduction = Number.isFinite(realPhysicalMultiplier) && realPhysicalMultiplier > 0
+    ? clamp(0.04, 1 - realPhysicalMultiplier, 0.28)
+    : fallbackReduction
+
+  return {
+    ...ship,
+    armorReduction: round2(armorReduction),
+    armorReductionPct: Math.round(armorReduction * 100),
+    armorPhysicalMultiplier: Number.isFinite(realPhysicalMultiplier) && realPhysicalMultiplier > 0
+      ? round2(realPhysicalMultiplier)
+      : round2(1 - fallbackReduction),
+    armorEnergyMultiplier: Number.isFinite(realEnergyMultiplier) && realEnergyMultiplier > 0
+      ? round2(realEnergyMultiplier)
+      : null,
+    armorDeflectionPhysical: Number(ship.armorDeflection?.physical) || 0,
+    armorDeflectionEnergy: Number(ship.armorDeflection?.energy) || 0,
+  }
+}
+
+function fallbackArmorReductionForShip(ship) {
+  const sizeBase = {
+    XS: 0.04,
+    S: 0.08,
+    M: 0.14,
+    L: 0.22,
+  }[ship?.size ?? 'S'] ?? 0.08
+  const hullBonus = Math.min(0.08, (Number(ship?.hullMax) || 0) / 18000)
+  return clamp(0.04, sizeBase + hullBonus, 0.28)
+}
+
+function withPowerPlantDefaults(ship) {
+  const powerSlots = componentSlotsForShip(ship).filter(slot => slot.type === 'power_plants')
+  const baselineOutput = powerSlots.reduce((sum, slot) => sum + baselinePowerOutputForSlot(slot), 0)
+
+  if (baselineOutput <= 0) return ship
+
+  return {
+    ...ship,
+    powerPlantBaselineOutput: round1(baselineOutput),
+    powerPlantOutput: round1(baselineOutput),
+    powerPlantSource: 'Base de nave',
+  }
+}
+
+function withComponentOverrides(ship, customConfig) {
+  const selectedComponents = resolveSelectedComponents(ship, customConfig)
+  if (selectedComponents.length === 0) {
+    return {
+      ...ship,
+      selectedComponents: [],
+      componentLoadoutSummary: [],
+    }
+  }
+
+  const next = { ...ship }
+  const summary = []
+
+  selectedComponents.forEach(({ slot, component }) => {
+    const mounts = Math.max(1, Number(slot.mounts) || 1)
+    summary.push({
+      type: slot.type,
+      label: COMPONENT_TYPE_LABELS[slot.type] ?? slot.type,
+      size: slot.size,
+      mounts,
+      componentId: component.id,
+      name: component.name,
+      detail: componentDetail(component, mounts),
+    })
+
+    if (slot.type === 'shield_generators' && component.shield) {
+      next.shieldMax = round1((Number(component.shield.maxHealth) || next.shieldMax / mounts) * mounts)
+      next.shieldRegen = round1((Number(component.shield.regenRate) || next.shieldRegen / mounts) * mounts)
+      next.shieldCooldown = round1(Number(component.shield.damagedDelay) || next.shieldCooldown || 5)
+      next.shieldResistance = component.shield.resistance ?? next.shieldResistance
+      next.shieldAbsorption = component.shield.absorption ?? next.shieldAbsorption
+      next.shieldSource = component.name
+    }
+
+    if (slot.type === 'radar' && component.radar) {
+      next.radarStrength = radarStrengthForComponent(component, ship)
+      next.radarSource = component.name
+    }
+
+    if (slot.type === 'power_plants') {
+      const output = componentPowerOutput(component) * mounts
+      const baseline = Number(ship.powerPlantBaselineOutput) || baselinePowerOutputForSlot(slot)
+      if (output > 0) {
+        next.powerPlantOutput = round1(output)
+        next.powerPlantBaselineOutput = round1(baseline || output)
+        next.powerPlantSource = component.name
+      }
+    }
+  })
+
+  const emission = selectedComponentEmission(selectedComponents)
+  if (emission.em > 0) {
+    next.sigEM = round2(clamp(0.30, (Number(ship.sigEM) || 1) * 0.55 + normalizeSignature(emission.em, 12000) * 0.45, 3.00))
+  }
+  if (emission.ir > 0) {
+    next.sigIR = round2(clamp(0.30, (Number(ship.sigIR) || 1) * 0.65 + normalizeSignature(emission.ir, 8000) * 0.35, 3.00))
+  }
+
+  return {
+    ...next,
+    selectedComponents,
+    componentLoadoutSummary: summary,
+  }
+}
+
+function resolveSelectedComponents(ship, customConfig) {
+  const selections = customConfig?.components ?? {}
+  if (!selections || Object.keys(selections).length === 0) return []
+
+  return componentSlotsForShip(ship)
+    .map((slot) => {
+      const component = componentById(selections[slot.type])
+      if (!component || component.type !== slot.type || Number(component.size) !== Number(slot.size)) return null
+      return { slot, component }
+    })
+    .filter(Boolean)
+}
+
+function componentSlotsForShip(ship) {
+  const components = Array.isArray(ship.realVehicle?.components) ? ship.realVehicle.components : []
+  return components
+    .filter(component => CONFIGURABLE_COMPONENT_TYPES.includes(component.type))
+    .map(component => {
+      const size = componentSizeNumber(component.componentSize ?? component.size)
+      if (!Number.isFinite(size) || size <= 0) return null
+      return {
+        type: component.type,
+        label: COMPONENT_TYPE_LABELS[component.type] ?? component.name ?? component.type,
+        size,
+        mounts: Math.max(1, Number(component.mounts) || Number(component.quantity) || 1),
+      }
+    })
+    .filter(Boolean)
+}
+
+function baselinePowerOutputForSlot(slot) {
+  const mounts = Math.max(1, Number(slot.mounts) || 1)
+  const outputs = componentOptionsForSlot(slot.type, slot.size)
+    .map(componentPowerOutput)
+    .filter(output => output > 0)
+    .sort((a, b) => a - b)
+
+  if (outputs.length === 0) return fallbackPowerOutputForSlot(slot) * mounts
+
+  const mid = Math.floor(outputs.length / 2)
+  const median = outputs.length % 2 === 0
+    ? (outputs[mid - 1] + outputs[mid]) / 2
+    : outputs[mid]
+  return median * mounts
+}
+
+function fallbackPowerOutputForSlot(slot) {
+  const size = Number(slot.size) || 1
+  return 12 + size * 4
+}
+
+function componentPowerOutput(component) {
+  const powerOutput = Number(component?.powerPlant?.powerOutput)
+  if (Number.isFinite(powerOutput) && powerOutput > 0) return powerOutput
+
+  const generatedPower = Number(component?.resource?.generation?.power)
+  if (Number.isFinite(generatedPower) && generatedPower > 0) return generatedPower
+
+  const maxPower = Number(component?.resource?.usage?.powerMax)
+  return Number.isFinite(maxPower) && maxPower > 0 ? maxPower : 0
+}
+
+function buildConfigurationSlots(ship, customConfig) {
+  const weaponSelections = customConfig?.weaponsBySlot ?? {}
+  const componentSelections = customConfig?.components ?? {}
+
+  return {
+    weapons: baseWeaponSlotsForShip(ship)
+      .map((slot) => {
+        const selectedWeapon = WEAPON_CATALOG[weaponSelections[slot.id]]
+        const selectedId = selectedWeapon && Number(selectedWeapon.size) === Number(slot.size)
+          ? selectedWeapon.id
+          : ''
+        const loadedWeaponId = selectedId || slot.baseWeaponId
+        const loadedWeapon = WEAPON_CATALOG[loadedWeaponId]
+
+        return {
+          ...slot,
+          selectedId: selectedId && selectedId !== slot.baseWeaponId ? selectedId : '',
+          selectedWeaponId: loadedWeaponId,
+          selectedWeaponName: loadedWeapon?.name ?? slot.baseWeaponName,
+          baseWeaponLabel: slot.baseWeaponName,
+          options: weaponOptionsForSize(slot.size)
+            .filter(option => option.id !== slot.baseWeaponId && option.name !== slot.baseWeaponName),
+        }
+      })
+      .filter(slot => slot.size > 0 && slot.baseWeaponId),
+    components: componentSlotsForShip(ship).map((slot) => {
+      const baseComponent = inferredBaseComponentForSlot(ship, slot)
+      const options = componentOptionsForSlot(slot.type, slot.size).map(component => ({
+        id: component.id,
+        name: component.name,
+        label: componentLabel(component),
+        detail: componentDetail(component, slot.mounts),
+      }))
+
+      return {
+        ...slot,
+        selectedId: componentSelections[slot.type] ?? '',
+        baseComponentId: baseComponent?.id ?? '',
+        baseComponentLabel: baseComponent ? componentLabel(baseComponent) : `${slot.label} base S${slot.size}`,
+        options: baseComponent
+          ? options.filter(option => option.id !== baseComponent.id)
+          : options,
+      }
+    }),
+  }
+}
+
+function inferredBaseComponentForSlot(ship, slot) {
+  const options = componentOptionsForSlot(slot.type, slot.size)
+  if (options.length === 0) return null
+
+  if (slot.type === 'shield_generators') {
+    return closestComponent(options, component => {
+      const mounts = Math.max(1, Number(slot.mounts) || 1)
+      const maxHealth = (Number(component.shield?.maxHealth) || 0) * mounts
+      const regen = (Number(component.shield?.regenRate) || 0) * mounts
+      const healthScore = relativeDiff(maxHealth, ship.shieldMax)
+      const regenScore = relativeDiff(regen, ship.shieldRegen)
+      return healthScore * 0.7 + regenScore * 0.3
+    })
+  }
+
+  if (slot.type === 'radar') {
+    return closestComponent(options, component => {
+      const strength = radarStrengthForComponent(component, ship)
+      return relativeDiff(strength, ship.radarStrength)
+    })
+  }
+
+  return null
+}
+
+function closestComponent(options, scoreForComponent) {
+  return options.reduce((best, component) => {
+    const score = scoreForComponent(component)
+    if (!best || score < best.score) return { component, score }
+    return best
+  }, null)?.component ?? null
+}
+
+function relativeDiff(value, target) {
+  const v = Number(value)
+  const t = Number(target)
+  if (!Number.isFinite(v) || !Number.isFinite(t) || t === 0) return Number.MAX_SAFE_INTEGER
+  return Math.abs(v - t) / Math.abs(t)
+}
+
+function weaponOptionsForSize(size) {
+  const seen = new Set()
+
+  return Object.values(WEAPON_CATALOG)
+    .filter(weapon => weapon.source === 'real')
+    .filter(weapon => Number(weapon.size) === Number(size))
+    .sort((a, b) => {
+      const typeCompare = String(a.type ?? '').localeCompare(String(b.type ?? ''))
+      if (typeCompare !== 0) return typeCompare
+      return String(a.name ?? '').localeCompare(String(b.name ?? ''))
+    })
+    .filter((weapon) => {
+      const key = `${normalizeNameForMatch(weapon.name)}|${weapon.type}|${weapon.size}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .map(weapon => ({
+      id: weapon.id,
+      name: weapon.name,
+      label: `${weapon.name} · ${weapon.type} · DPS ${Math.round(Number(weapon.burstDps) || 0)}`,
+      detail: `${weapon.type} · ${Math.round(Number(weapon.range) || 0)}m · ${Number(weapon.ammo) > 0 ? `${weapon.ammo} mun.` : 'energía'}`,
+    }))
+}
+
+function componentDetail(component, mounts = 1) {
+  const count = Math.max(1, Number(mounts) || 1)
+  if (component.type === 'shield_generators' && component.shield) {
+    return `${Math.round((Number(component.shield.maxHealth) || 0) * count)} HP · ${Math.round((Number(component.shield.regenRate) || 0) * count)}/s`
+  }
+  if (component.type === 'power_plants') {
+    return `${Math.round(Number(component.powerPlant?.powerOutput) || Number(component.resource?.generation?.power) || 0)} energía · EM ${Math.round(Number(component.emission?.emMax) || 0)}`
+  }
+  if (component.type === 'coolers') {
+    return `${Math.round(Number(component.cooler?.coolingRate) || Number(component.resource?.generation?.coolant) || 0)} refrigeración · IR ${Math.round(Number(component.emission?.ir) || 0)}`
+  }
+  if (component.type === 'radar') {
+    const sensitivity = radarSensitivity(component)
+    const maxAssist = Math.round(Number(component.radar?.aimAssist?.maxDistance) || 0)
+    return `sens. ${sensitivity.toFixed(2)} · ayuda ${maxAssist}m`
+  }
+  return `${component.typeLabel ?? 'Componente'} S${component.size}`
+}
+
+function powerPlantWeaponSupport(ship) {
+  const output = Number(ship?.powerPlantOutput)
+  const baseline = Number(ship?.powerPlantBaselineOutput)
+  if (!Number.isFinite(output) || output <= 0 || !Number.isFinite(baseline) || baseline <= 0) {
+    return {
+      output: 0,
+      baseline: 0,
+      energyRatio: 1,
+      capacityMult: 1,
+      regenMult: 1,
+      drainMult: 1,
+    }
+  }
+
+  const energyRatio = clamp(0.75, output / baseline, 1.25)
+
+  return {
+    output: round1(output),
+    baseline: round1(baseline),
+    energyRatio: round2(energyRatio),
+    capacityMult: round2(clamp(0.94, 1 + (energyRatio - 1) * 0.22, 1.08)),
+    regenMult: round2(clamp(0.85, 1 + (energyRatio - 1) * 0.65, 1.18)),
+    drainMult: round2(clamp(0.92, 1 - (energyRatio - 1) * 0.25, 1.10)),
+  }
+}
+
+function selectedComponentEmission(selectedComponents) {
+  return selectedComponents.reduce((acc, { slot, component }) => {
+    const mounts = Math.max(1, Number(slot.mounts) || 1)
+    acc.em += (Number(component.emission?.emMax) || 0) * mounts
+    acc.ir += (Number(component.emission?.ir) || 0) * mounts
+    return acc
+  }, { em: 0, ir: 0 })
+}
+
+function radarStrengthForComponent(component, ship) {
+  const sensitivity = radarSensitivity(component)
+  const sizeBonus = (Number(component.size) || 1) * 0.06
+  const assistBonus = (Number(component.radar?.aimAssist?.maxDistance) || 0) / 5000 * 0.14
+  const base = Number(ship.radarStrength) || 1
+  return round2(clamp(0.70, base * 0.55 + 0.55 + sensitivity * 0.28 + sizeBonus + assistBonus, 1.80))
+}
+
+function radarSensitivity(component) {
+  const s = component.radar?.sensitivity ?? {}
+  const values = [s.infrared, s.electromagnetic, s.crossSection, s.resource]
+    .map(Number)
+    .filter(Number.isFinite)
+  if (values.length === 0) return 0.8
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function componentSizeNumber(size) {
+  const s = String(size ?? '').toUpperCase()
+  if (s === 'S') return 1
+  if (s === 'M') return 2
+  if (s === 'L') return 3
+  if (s === 'C') return 4
+  const n = Number(s)
+  return Number.isFinite(n) ? n : NaN
 }
 
 function normalizeWeaponLoadout(ship) {
@@ -464,22 +1254,26 @@ function calculateWeaponBank(ship, loadout) {
   const ballisticWeaponCount = weaponGroups
     .filter(group => Number.isFinite(Number(group.ammoCapacity)) && Number(group.ammoCapacity) > 0)
     .reduce((sum, group) => sum + (Number(group.count) || 0), 0)
+  const powerPlant = powerPlantWeaponSupport(ship)
 
+  const baseCapacity = activeWeapons.reduce((sum, w) => sum + weaponCapacityUnits(w) * w.count, 0)
   const capacity = clamp(
     75,
-    activeWeapons.reduce((sum, w) => sum + weaponCapacityUnits(w) * w.count, 0),
+    baseCapacity * powerPlant.capacityMult,
     190
   )
+  const baseDrainPerSec = activeWeapons.reduce((sum, w) => sum + weaponDrainPerSecond(w) * w.count, 0)
   const drainPerSec = clamp(
     18,
-    activeWeapons.reduce((sum, w) => sum + weaponDrainPerSecond(w) * w.count, 0),
+    baseDrainPerSec * powerPlant.drainMult,
     62
   )
+  const baseRegenPerSec = realRegen > 0
+    ? realRegen
+    : 10 + totalCount * 0.65 + avgSize * 1.4 + Math.max(0, 260 - totalBurstDps) / 45 - powerDraw * 0.25
   const regenPerSec = clamp(
     10,
-    realRegen > 0
-      ? realRegen
-      : 10 + totalCount * 0.65 + avgSize * 1.4 + Math.max(0, 260 - totalBurstDps) / 45 - powerDraw * 0.25,
+    baseRegenPerSec * powerPlant.regenMult,
     36
   )
 
@@ -493,6 +1287,13 @@ function calculateWeaponBank(ship, loadout) {
     avgSize: round1(avgSize || 0),
     emMax: Math.round(emMax),
     powerDraw: round1(powerDraw),
+    powerPlantOutput: powerPlant.output,
+    powerPlantBaselineOutput: powerPlant.baseline,
+    powerPlantEnergyRatio: powerPlant.energyRatio,
+    powerPlantRegenMult: powerPlant.regenMult,
+    powerPlantCapacityMult: powerPlant.capacityMult,
+    powerPlantDrainMult: powerPlant.drainMult,
+    powerPlantSource: ship.powerPlantSource ?? null,
     dataSource,
     realWeaponCount: realCount,
     ammoCapacity,
@@ -554,15 +1355,26 @@ function normalizePenetration(weapon) {
   const p = weapon.penetration && typeof weapon.penetration === 'object' ? weapon.penetration : {}
   const explicitThickness = Number(p.thickness)
   const explicitBase = Number(p.baseDistance)
+  const explicitNear = Number(p.nearRadius)
+  const explicitFar = Number(p.farRadius)
   const thickness = Number.isFinite(explicitThickness) && explicitThickness > 0
     ? explicitThickness
     : inferredPenetrationThickness(weapon)
+  const baseDistance = Number.isFinite(explicitBase) && explicitBase > 0
+    ? explicitBase
+    : thickness * 0.35
+  const nearRadius = Number.isFinite(explicitNear) && explicitNear > 0
+    ? explicitNear
+    : baseDistance * 0.05
+  const farRadius = Number.isFinite(explicitFar) && explicitFar > 0
+    ? explicitFar
+    : Math.max(nearRadius, baseDistance * 0.10)
 
   return {
     thickness: round2(thickness),
-    baseDistance: Number.isFinite(explicitBase) && explicitBase > 0
-      ? round2(explicitBase)
-      : round2(thickness * 0.35),
+    baseDistance: round2(baseDistance),
+    nearRadius: round2(nearRadius),
+    farRadius: round2(farRadius),
   }
 }
 
@@ -729,16 +1541,20 @@ function withSensorDefaults(ship) {
   const stealthCS = isStealth ? 0.85 : 1
   const weaponEm = (ship.weaponBank?.emMax ?? 0) / 1400
   const weaponPower = (ship.weaponBank?.powerDraw ?? 0) / 8
-  const sigEM = ship.sigEM ?? clamp(
+  const fallbackSigEM = clamp(
     0.35,
     (0.45 + (ship.dps ?? 0) / 360 * 0.28 + weaponEm * 0.18 + weaponPower * 0.10 + (ship.shieldRegen ?? 0) / 120 * 0.18 + (ship.shieldMax ?? 0) / 1800 * 0.12) * stealthEMIR,
     2.20
   )
-  const sigIR = ship.sigIR ?? clamp(
+  const fallbackSigIR = clamp(
     0.35,
     (0.45 + (ship.speedSCM ?? 0) / 280 * 0.24 + (ship.speedBoost ?? 0) / 1500 * 0.22 + (ship.dps ?? 0) / 500 * 0.10 + weaponPower * 0.08) * stealthEMIR,
     2.20
   )
+  const baseSigEM = Number.isFinite(Number(ship.sigEM)) ? Number(ship.sigEM) : fallbackSigEM
+  const baseSigIR = Number.isFinite(Number(ship.sigIR)) ? Number(ship.sigIR) : fallbackSigIR
+  const sigEM = clamp(0.30, (baseSigEM + weaponEm * 0.10 + weaponPower * 0.06) * stealthEMIR, 3.00)
+  const sigIR = clamp(0.30, (baseSigIR + weaponPower * 0.04) * stealthEMIR, 3.00)
   const sigCS = ship.sigCS ?? clamp(
     0.35,
     (d.sigCS + (ship.hullMax ?? 0) / 4000 * 0.20 + (ship.shieldMax ?? 0) / 4000 * 0.12 - (ship.evasion ?? 0.25) * 0.15) * stealthCS,
@@ -749,9 +1565,12 @@ function withSensorDefaults(ship) {
   return { ...ship, radarStrength, sigEM, sigIR, sigCS, signatureProfile }
 }
 
-Object.keys(SHIPS).forEach((id) => {
-  SHIPS[id] = withSensorDefaults(withWeaponDefaults(SHIPS[id]))
-})
+export const SHIPS = Object.fromEntries(
+  Object.entries(BASE_SHIPS).map(([id, ship]) => {
+    const realShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(ship)))
+    return [id, withSensorDefaults(withWeaponDefaults(realShip))]
+  })
+)
 
 /** Lista ordenada para selectores de UI */
 export const SHIP_LIST = Object.values(SHIPS)

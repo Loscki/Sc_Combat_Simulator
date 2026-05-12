@@ -32,8 +32,573 @@ No borrar entradas antiguas: este archivo es memoria historica del proyecto.
 - El motor exige una solucion de tracking/time-on-target antes de disparar.
 - La deteccion compara radar del atacante contra firma EM/IR/CS del objetivo.
 - El resultado expone disparos, impactos y porcentaje de acierto por nave.
+- El catalogo real de armas se genera desde Star Citizen Wiki API e incluye
+  penetracion real para la mayoria de armas importadas.
+- La penetracion usa `thickness`, `baseDistance`, `nearRadius` y `farRadius`
+  para calcular sangrado de escudo y bypass de armor.
+- Las naves pueden resolverse con variantes de loadout: stock, gatlings
+  balisticas, canones balisticos y repetidores balisticos cuando sus hardpoints
+  lo permiten.
+- Los parametros principales de nave ya se importan desde Star Citizen Wiki API:
+  casco, escudos, regeneracion, velocidades, firmas, armor, hardpoints y stock
+  weaponry.
+- El blindaje se normaliza como mitigacion de casco (`armorReductionPct`) y se
+  muestra en la tarjeta de cada nave.
+- La planta de energia modifica el sostenimiento del capacitor de armas:
+  capacidad, recarga y consumo efectivo.
+- Cada bando tiene un configurador propio de armas y componentes compatibles
+  con la nave seleccionada.
+- Las armas se configuran por espacio individual de arma, no por grupo de
+  hardpoints del mismo tamano.
+- El catalogo real de componentes se genera desde Star Citizen Wiki API e
+  incluye escudos, plantas de energia, coolers y radares.
 
 ## Historial
+
+### 2026-05-12 - Planta de energia afecta capacitor de armas
+
+Objetivo:
+Hacer que el capacitor de armas no dependa solo del arma equipada, sino tambien
+de la planta de energia de la nave.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+- `src/components/ShipCard.jsx`
+- `src/components/ResultsPanel.jsx`
+- `AI_CHANGELOG.md`
+
+Decision:
+La API trae `powerPlant.powerOutput` a cero en muchas plantas, asi que se usa
+`resource.generation.power` como fuente real de potencia. Para la nave base se
+calcula una potencia de referencia por tamano compatible de power plant
+usando la mediana de las plantas disponibles; si el usuario equipa una planta
+con mas potencia, mejora el sostenimiento del banco de armas, y si equipa una
+planta mas baja lo penaliza.
+
+Impacto en simulacion:
+- `powerPlantOutput` y `powerPlantBaselineOutput` quedan normalizados en la nave;
+- `weaponBank.powerPlantEnergyRatio` compara la planta equipada contra la base;
+- una planta mejor sube ligeramente capacidad y recarga, y baja el consumo
+  efectivo;
+- una planta peor baja capacidad/recarga y sube consumo efectivo;
+- el motor exporta estos datos en `stats` para resultados.
+
+UI:
+- La ficha de nave muestra `Planta` con la potencia de la power plant.
+- `Cap. armas` pasa a `Capacitor` para evitar ambiguedad.
+- Resultados muestra el soporte de planta en el bloque `Banco de armas`.
+- Nota posterior: la fila de ficha `Planta` se cambio a `Soporte` y muestra un
+  multiplicador (`1.00x`, `1.10x`, etc.) en vez del valor bruto de potencia,
+  porque no esta en las mismas unidades que `Consumo/s`.
+
+Verificacion:
+- `npm run build` correcto.
+- Validacion con Gladius:
+  - base: potencia 15.5, ratio 1.00x, recarga 30/s;
+  - JS-300: potencia 17, ratio 1.10x, recarga 31.8/s;
+  - Slipstream: potencia 14, ratio 0.90x, recarga 28.2/s.
+
+### 2026-05-12 - Aclaracion de municion balistica
+
+Objetivo:
+Evitar confusion con el dato de municion en las naves. La cifra no representa
+municion de todas las armas, sino solo proyectiles finitos de armas balisticas.
+
+Archivos tocados:
+- `src/components/ShipCard.jsx`
+- `src/components/ResultsPanel.jsx`
+- `src/engine/combatEngine.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+La ficha de nave cambia la etiqueta a `Mun. bal.`. Si no hay armas con municion
+finita, muestra `—` en lugar de infinito. En resultados, el dato pasa a
+`Munición balística` y el subtitulo aclara cuantos proyectiles quedan, la
+capacidad total y cuantas armas balisticas tiene la nave.
+
+Ejemplo:
+- Gladius stock: 2 Panther laser sin municion finita + 1 Mantis con 4314
+  proyectiles.
+- Gladius con Deadbolt III en un slot: 2 Panther laser + 1 Deadbolt III con 387
+  proyectiles.
+
+Verificacion:
+- `npm run build` correcto.
+- Validacion por datos:
+  - stock Gladius: `ammoCapacity = 4314`, `ballisticWeaponCount = 1`;
+  - Gladius con Deadbolt III: `ammoCapacity = 387`, `ballisticWeaponCount = 1`.
+
+### 2026-05-12 - Blindaje visible en datos de nave
+
+Objetivo:
+Aclarar si el blindaje existe en la simulacion y hacerlo visible antes de
+ejecutar combates.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+- `src/components/ShipCard.jsx`
+- `AI_CHANGELOG.md`
+
+Decision:
+El blindaje ya se importaba desde Star Citizen Wiki API como `vehicle.armor`
+(`health`, `damageMultipliers`, `resistanceMultipliers`, `deflection`) y el
+motor ya lo usaba para reducir dano al casco. Se anade ahora una normalizacion
+explicita en la capa de datos:
+- `armorReduction`;
+- `armorReductionPct`;
+- `armorPhysicalMultiplier`;
+- `armorEnergyMultiplier`;
+- deflection fisica/energia.
+
+El motor prioriza `ship.armorReduction` si existe, para que UI y simulacion lean
+la misma mitigacion base. La tarjeta de nave muestra una nueva fila `Blindaje`.
+
+Verificacion:
+- `npm run build` correcto.
+- Validacion por datos:
+  - Gladius: blindaje 25%, armor health 4125;
+  - Arrow: blindaje 25%, armor health 4125;
+  - Hornet F7C: blindaje 25%, armor health 8250.
+
+### 2026-05-12 - Retirada de tarjeta "Armas cargadas"
+
+Objetivo:
+Reducir duplicacion visual en las tarjetas de nave. Los selectores de arma ya
+muestran el arma base o personalizada de cada slot, por lo que la tarjeta
+"Armas cargadas" aportaba la misma informacion dos veces.
+
+Archivos tocados:
+- `src/components/ShipCard.jsx`
+- `src/index.css`
+- `AI_CHANGELOG.md`
+
+Decision:
+Se elimina la tarjeta de resumen de armas/componentes dentro de cada `ShipCard`.
+La configuracion sigue visible y editable en los selectores por slot, y el
+resumen detallado del loadout se mantiene en resultados.
+
+Verificacion:
+- `npm run build` correcto.
+- Navegador validado: ya no aparece el texto "Armas cargadas".
+
+### 2026-05-12 - Armas configurables por espacio individual
+
+Objetivo:
+Permitir que el usuario elija un arma distinta para cada espacio de arma
+disponible en la nave. Ejemplo: la Gladius carga por defecto dos Panther y una
+Mantis, y ahora se pueden cambiar esos tres espacios de forma independiente.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/hooks/useSimulator.js`
+- `src/App.jsx`
+- `src/components/ShipCard.jsx`
+- `src/components/ResultsPanel.jsx`
+- `src/data/components.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+Se sustituye el modelo de configuracion `weaponsBySize` por `weaponsBySlot`.
+La capa de datos expande los hardpoints reales de la nave en slots individuales
+(`weapon-1`, `weapon-2`, etc.) y asigna a cada slot el arma base importada desde
+el loadout real de la nave cuando esta disponible.
+
+El selector general de loadouts se elimina de la UI. El loadout base queda
+cargado por defecto y cada selector muestra directamente el arma o componente
+base que hay en ese espacio. Al cambiar un slot, la nave pasa internamente a
+`custom` y se recalculan DPS, municion, capacitor, rango y perfil de dano.
+
+UI:
+- Gladius muestra tres selectores S3 separados:
+  - Arma 1: CF-337 Panther Repeater;
+  - Arma 2: CF-337 Panther Repeater;
+  - Arma 3: Mantis GT-220 Gatling.
+- Los componentes ya no muestran "Stock" como opcion visible; usan el nombre
+  inferido del componente base cuando se puede o una etiqueta "base Sx".
+- Resultados cambia el bloque "Loadout" por "Armas" y muestra
+  "Base de nave" o "Personalizadas".
+
+Verificacion:
+- `npm run build` correcto.
+- Validacion por datos:
+  - Gladius resuelve 3 slots S3 individuales;
+  - cambiar solo `weapon-3` a `Deadbolt III Cannon` mantiene las dos Panther y
+    recalcula el banco de armas con 3 armas totales.
+
+Riesgos / siguientes pasos:
+- La API de naves trae nombres reales de armas base, pero los componentes base
+  de algunas naves llegan genericos. Para escudos/radar se infiere el nombre por
+  cercania de estadisticas; para plantas/coolers puede seguir apareciendo una
+  etiqueta base por tamano hasta tener una fuente mas exacta.
+
+### 2026-05-11 - Configurador de armas y componentes compatibles
+
+Objetivo:
+Permitir que cada usuario personalice las armas y componentes de cada nave sin
+depender de una URL externa de SP Viewer.
+
+Archivos tocados:
+- `scripts/sync-sc-data.mjs`
+- `src/data/generated/components.generated.js`
+- `src/data/components.js`
+- `src/data/ships.js`
+- `src/hooks/useSimulator.js`
+- `src/App.jsx`
+- `src/components/ShipCard.jsx`
+- `src/components/ResultsPanel.jsx`
+- `src/index.css`
+- `src/utils/spviewerUrl.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+La importacion por URL de SP Viewer se retira de la UI porque la API de
+`data.spviewer.eu` permite leer loadouts por `sharedid`, pero su CORS no permite
+usar esa importacion directamente desde `localhost`/nuestra app sin backend.
+
+En su lugar se crea un configurador nativo:
+- armas filtradas por tamano real de hardpoint de la nave;
+- escudos filtrados por tamano de generador admitido;
+- plantas de energia filtradas por tamano;
+- coolers filtrados por tamano;
+- radar filtrado por tamano.
+
+El script `npm run sync:sc-data` ahora genera `components.generated.js` con 309
+componentes reales desde Star Citizen Wiki API:
+- Shield;
+- PowerPlant;
+- Cooler;
+- Radar.
+
+Impacto en simulacion:
+- cambiar armas recalcula DPS, municion, rango, capacitor y perfil de dano;
+- cambiar escudos recalcula HP de escudo, regeneracion y cooldown;
+- cambiar radar modifica la fuerza de deteccion;
+- cambiar plantas/coolers modifica firmas EM/IR usadas por deteccion;
+- los resultados muestran si los componentes son stock o personalizados.
+
+UI:
+- Se elimina el campo `SP Viewer URL`.
+- Se anade `Armas compatibles` por tamano de hardpoint.
+- Se anade `Componentes compatibles` por tipo y tamano admitido por la nave.
+- El loadout `Personalizado` aparece automaticamente cuando se cambia un arma.
+
+Verificacion:
+- `npm run sync:sc-data` correcto:
+  - 180 armas;
+  - 244 naves;
+  - 309 componentes.
+- `npm run build` correcto.
+- Navegador validado:
+  - no aparece `SP Viewer`;
+  - aparecen `Armas compatibles` y `Componentes compatibles`;
+  - Gladius muestra `3x hardpoint S3` y componentes S1 compatibles;
+  - al elegir `Revenant Gatling`, `AllStop` y `Abetti`, la UI pasa a
+    `Personalizado`;
+  - la simulacion muestra el loadout y componentes personalizados en resultados;
+  - sin errores de consola.
+
+Riesgos / siguientes pasos:
+- Nota posterior: la configuracion por grupo de hardpoints quedo sustituida por
+  configuracion por slot individual en la entrada del 2026-05-12.
+- Power plant y coolers ya afectan firmas EM/IR, pero todavia no modelan fallos
+  de energia, calor ni apagados de subsistemas.
+- La importacion SP Viewer podria retomarse mas adelante con un proxy/backend o
+  con una importacion manual de JSON descomprimido.
+
+### 2026-05-11 - Campo de URL SP Viewer por nave
+
+Objetivo:
+Permitir pegar una URL de SP Viewer por bando para vincular la simulacion con
+configuraciones externas creadas en esa plataforma.
+
+Archivos tocados:
+- `src/utils/spviewerUrl.js`
+- `src/hooks/useSimulator.js`
+- `src/App.jsx`
+- `src/components/ShipCard.jsx`
+- `src/components/ResultsPanel.jsx`
+- `src/index.css`
+- `AI_CHANGELOG.md`
+
+Decision:
+Se anaden `shipASpviewerUrl` y `shipBSpviewerUrl` a la configuracion. La nueva
+utilidad `parseSpviewerUrl()` valida URLs de `spviewer.eu`, extrae `ship=` o
+`vehicle=`, resuelve la nave contra el catalogo local y devuelve un estado para
+la UI.
+
+Si la nave existe localmente, el selector de ese bando se sincroniza
+automaticamente. Si la URL trae un parametro de loadout reconocible y coincide
+con un loadout local, tambien se sincroniza el loadout. La URL completa queda
+guardada en la nave resuelta para que aparezca en los resultados.
+
+UI:
+- Campo `SP Viewer URL` en cada tarjeta de nave.
+- Mensaje de estado con la nave reconocida o el error de URL.
+- Resultados muestran `SP Viewer / Vinculada` con la URL usada.
+
+Verificacion:
+- Parser probado con:
+  - `https://www.spviewer.eu/performance?ship=aegs_gladius`;
+  - `https://spviewer.eu/performance?ship=anvl_arrow&loadout=ballistic_cannon`;
+  - slug directo `aegs_gladius`;
+  - URL externa no valida.
+- `npm run build` correcto.
+- Visualizador recargado y validado en navegador:
+  - el campo aparece para Alfa y Beta;
+  - al pegar la URL de Gladius se reconoce la nave;
+  - despues de simular, los resultados conservan la URL vinculada.
+
+Riesgos / siguientes pasos:
+- Todavia no se descarga ni se interpreta el loadout real de la pagina de SP
+  Viewer. Para eso falta identificar si SP Viewer expone el loadout en la URL,
+  en HTML embebido o en una API accesible.
+- Cuando se conozca ese formato, el siguiente paso sera convertir esa URL en un
+  loadout real de armas/componentes dentro de `ships.js`.
+
+### 2026-05-11 - Datos reales de naves importados desde API
+
+Objetivo:
+Sustituir los parametros mock principales de las naves por datos reales de Star
+Citizen Wiki API.
+
+Archivos tocados:
+- `scripts/sync-sc-data.mjs`
+- `src/data/generated/vehicles.generated.js`
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+- `src/components/ShipCard.jsx`
+- `AI_CHANGELOG.md`
+
+Decision:
+El script `npm run sync:sc-data` ahora genera dos catalogos:
+- `weapons.generated.js`, con armas reales;
+- `vehicles.generated.js`, con naves reales.
+
+Para naves se consulta `/api/vehicles` y despues el detalle de cada nave para
+tener componentes/hardpoints fiables. El catalogo generado incluye 244 naves de
+la version:
+
+```txt
+4.7.2-LIVE.11674325
+```
+
+`ships.js` aplica los datos reales sobre la ficha local cuando encuentra una
+coincidencia por slug. Las excepciones actuales son:
+- `rsi_aurora_mr` -> `rsi-aurora-gs-mr`;
+- `rsi_aurora_ln` -> `rsi-aurora-gs-ln`.
+
+Parametros reales aplicados:
+- nombre/fabricante/rol cuando existen en API;
+- `hullMax` desde `health`;
+- `shieldMax` desde `shield.hp`;
+- `shieldRegen` desde `shield.regeneration`;
+- `speedSCM` desde `speed.scm`;
+- `speedBoost` desde `speed.max`;
+- hardpoints desde componentes de tipo `weapons`;
+- stock loadout desde `weaponry.fixed_weapons`;
+- firma EM/IR/CS normalizada desde `signature`, `emission` y `cross_section`;
+- armor real desde `armor.damageMultipliers`.
+
+El motor usa ahora los multiplicadores reales de armor por tipo de dano cuando
+estan disponibles. Por ejemplo, el armor fisico real se traduce a mitigacion
+base de casco antes de aplicar penetracion.
+
+UI:
+- `ShipCard` muestra `Nave: datos reales` y version de datos.
+- Las barras de casco/escudo/regeneracion usan escala compatible con HP reales.
+- El loadout stock visible en UI sale del stock real importado cuando se puede
+  mapear contra el catalogo de armas.
+
+Verificacion:
+- `npm run sync:sc-data` correcto:
+  - 180 armas;
+  - 244 naves.
+- Todas las 15 naves actuales tienen correspondencia real en la API.
+- Ejemplos tras importar:
+  - Gladius: casco 6110, escudo 7920, regen 496/s, hardpoints S3 x3.
+  - Arrow: casco 8580, escudo 3960, regen 248/s, hardpoints S3 x2.
+  - Buccaneer: casco 9480, escudo 2700, hardpoints S4 x1 + S3 x2 + S1 x2.
+- `npm run build` correcto.
+- Visualizador recargado y validado:
+  - aparece `Nave: datos reales`;
+  - aparece `4.7.2-LIVE.11674325`;
+  - Gladius muestra casco 6110 y escudo 7920;
+  - stock real muestra `Mantis GT-220 Gatling`.
+- Prueba Gladius `Balistica Canones` vs Arrow `Balistica Gatlings`:
+  - ganador Alfa en 113.3s;
+  - dano `physical`;
+  - municion finita;
+  - armor real aplicado.
+
+Riesgos / siguientes pasos:
+- Al usar HP y regeneracion reales, los combates stock duran bastante mas que
+  con los mocks antiguos. Hay que recalibrar la escala de DPS/ventanas de fuego
+  para tiempos de combate realistas.
+- Los campos `accuracy` y `evasion` siguen siendo abstracciones del simulador,
+  pero ahora se derivan de agilidad, velocidad, firma y hardpoints reales.
+- El siguiente paso recomendado es recalibrar `WEAPON_DPS_TO_SIM_SCALE`,
+  capacitor y tracking usando HP/escudos reales como nueva base.
+
+### 2026-05-11 - Loadouts balisticos configurables en UI
+
+Objetivo:
+Anadir loadouts balisticos reales para poder probar municion, dano fisico,
+penetracion y armor desde escenarios visibles en la UI.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/hooks/useSimulator.js`
+- `src/components/ShipCard.jsx`
+- `src/components/ResultsPanel.jsx`
+- `src/App.jsx`
+- `src/index.css`
+- `AI_CHANGELOG.md`
+
+Decision:
+Las naves ya no se duplican para representar loadouts. `ships.js` mantiene una
+nave base y genera variantes de loadout segun sus hardpoints:
+- `stock`;
+- `ballistic_gatling`;
+- `ballistic_cannon`;
+- `ballistic_repeater`.
+
+Los loadouts balisticos usan armas reales del catalogo importado:
+- S1: YellowJacket / Deadbolt I / Buzzsaw;
+- S2: Scorpion GT-215 / Deadbolt II / Sawbuck;
+- S3: Mantis GT-220 / Deadbolt III / Shredder;
+- S4: AD4B / Deadbolt IV cuando haya hardpoints S4.
+
+`getShipForLoadout(shipId, loadoutId)` resuelve una nave con su armamento,
+weapon bank, DPS simulado, municion y firmas recalculadas para ese loadout.
+
+UI:
+- `ShipCard` muestra selector de loadout por nave.
+- La tarjeta muestra nombre del loadout, descripcion y armas concretas.
+- `ResultsPanel` muestra el loadout usado en la simulacion y sus armas.
+- El header de la app deja de decir `mock data` y pasa a indicar armas reales y
+  loadouts configurables.
+
+Verificacion:
+- `npm run build` correcto.
+- Prueba directa Gladius `Balistica Canones` vs Arrow `Balistica Gatlings`:
+  - dano `physical`;
+  - municion finita;
+  - 0% de bloqueo por capacitor;
+  - los cañones consumieron 102 de 1173 proyectiles;
+  - los gatlings consumieron 1036 de 8820 proyectiles.
+- Visualizador recargado y validado:
+  - aparecen selectores de loadout para Alfa y Beta;
+  - aparecen `Balistica Canones`, `Balistica Gatlings`, `Deadbolt II Cannon` y
+    `Scorpion GT-215 Gatling`;
+  - resultados muestran `physical:` y `Municion`.
+
+Riesgos / siguientes pasos:
+- Los loadouts generados son variantes sistematicas por tamano, no loadouts
+  canonicos exactos de cada jugador o parche.
+- Siguiente paso recomendado: calibrar duraciones y letalidad de loadouts
+  balisticos frente a loadouts de energia, especialmente canones Deadbolt.
+
+### 2026-05-11 - Calibracion inicial de armor y penetracion
+
+Objetivo:
+Convertir los campos reales de penetracion de armas en una formula mas expresiva
+para escudos y casco, evitando usar un unico numero plano.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+- `AI_CHANGELOG.md`
+
+Decision:
+`ships.js` conserva ahora los campos reales completos de penetracion en cada
+grupo de arma:
+- `thickness`;
+- `baseDistance`;
+- `nearRadius`;
+- `farRadius`.
+
+El motor separa dos efectos:
+- `shieldPierce`: cuanto dano fisico sangra a traves del escudo;
+- `armorPierce`: cuanto armor del casco ignora el impacto.
+
+La senal principal ya no es `thickness`, porque en la API viene practicamente
+constante para casi todas las armas. La formula da mas peso a:
+- `baseDistance`, como profundidad/consistencia de penetracion;
+- radio medio entre `nearRadius` y `farRadius`, como anchura efectiva de la
+  penetracion;
+- una caida suave de penetracion cuando el impacto ocurre cerca del rango maximo
+  del arma.
+
+Tambien se corrigio el coste de capacitor de armas balisticas: si el grupo de
+arma declara `capCostPerShot: 0`, el motor respeta ese cero y no aplica el coste
+minimo generico.
+
+UI:
+- `ResultsPanel` muestra `Blindaje casco` por nave.
+- El valor representa la mitigacion base del casco antes de aplicar la
+  penetracion del arma atacante.
+
+Verificacion:
+- `npm run build` correcto.
+- Simulacion normal Gladius vs Arrow correcta:
+  - ganador Alfa;
+  - dano separado en escudo/casco;
+  - blindaje mostrado: Gladius 14%, Arrow 8%.
+- Prueba controlada con dos armas balisticas identicas salvo penetracion:
+  - baja penetracion: 729 dano total, 556 a escudo, 172 a casco;
+  - alta penetracion: 823 dano total, 449 a escudo, 375 a casco;
+  - ambas gastaron 150 proyectiles;
+  - 0% de bloqueo por capacitor.
+- Visualizador recargado y validado: aparecen `Blindaje casco`,
+  `Mitigacion base antes de penetracion` y el desglose `escudo/casco`.
+
+Riesgos / siguientes pasos:
+- La formula ya diferencia armas, pero los coeficientes son una calibracion
+  inicial. Conviene ajustarlos cuando tengamos combates de referencia o loadouts
+  balisticos reales en naves jugables.
+- El siguiente paso recomendado es anadir o seleccionar loadouts balisticos
+  reales para probar municion, penetracion y armor en escenarios visibles de la
+  UI.
+
+### 2026-05-11 - API recuperada y penetracion real importada
+
+Objetivo:
+Reintentar la sincronizacion pendiente con Star Citizen Wiki API para refrescar
+el catalogo real de armas con los campos de penetracion.
+
+Archivos tocados:
+- `src/data/generated/weapons.generated.js`
+- `AI_CHANGELOG.md`
+
+Decision:
+Se ejecuto de nuevo `npm run sync:sc-data` y esta vez la API respondio
+correctamente. El catalogo generado mantiene 180 armas importadas desde:
+
+```txt
+4.7.2-LIVE.11674325
+```
+
+La normalizacion actual guarda `penetration` por arma cuando el campo existe en
+la API:
+- `thickness`;
+- `baseDistance`;
+- `nearRadius`;
+- `farRadius`.
+
+Verificacion:
+- `npm run sync:sc-data` correcto.
+- Catalogo regenerado en `src/data/generated/weapons.generated.js`.
+- 176 de 180 armas tienen al menos un valor numerico positivo de penetracion.
+- `npm run build` correcto.
+
+Riesgos / siguientes pasos:
+- Validar como traducir `baseDistance` y radios de penetracion a la escala de
+  armor del simulador.
+- Revisar las 4 armas sin penetracion util para decidir si se quedan con
+  fallback inferido o requieren ajuste manual.
 
 ### 2026-05-11 - Municion balistica finita y armor
 
