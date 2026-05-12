@@ -27,7 +27,8 @@
  *
  * Escudos:
  *   - Absorben todo el daño primero; el exceso va al casco
- *   - Tras recibir daño, entran en cooldown (shieldCooldown segundos)
+ *   - Tras recibir daño, entran en cooldown (shieldDamagedDelay segundos)
+ *   - Si caen a 0, usan un cooldown más largo (shieldDownedDelay segundos)
  *   - Durante cooldown no regeneran
  *   - Fuera de cooldown regeneran shieldRegen HP/s
  *
@@ -92,7 +93,7 @@ export const WEAPON_CAP_MIN = 75
 export const WEAPON_CAP_MAX = 190
 export const WEAPON_CAP_REGEN_MIN = 12
 export const WEAPON_CAP_REGEN_MAX = 36
-export const WEAPON_CAP_DRAIN_MIN = 22
+export const WEAPON_CAP_DRAIN_MIN = 0
 export const WEAPON_CAP_DRAIN_MAX = 62
 export const WEAPON_CAP_RESUME_MIN = 0.18
 export const WEAPON_CAP_RESUME_MAX = 0.34
@@ -634,11 +635,43 @@ function closingSpeedForRange(rangeM, shipA, shipB, fallbackMps) {
 
 function trackingQuality(attackerShip, defenderShip, pilotSkill, rangeFactor, inMergeWindow, rand) {
   const s = clampPilotSkill(pilotSkill) / 10
-  const handling = clamp01(0.45 + (attackerShip.accuracy ?? 0.6) * 0.30 + (attackerShip.evasion ?? 0.25) * 0.25)
-  const defensivePressure = clamp01(0.18 + (defenderShip.evasion ?? 0.25) * 0.55)
+  const attackerControl = trackingControlScore(attackerShip)
+  const defenderPressure = defensiveManeuverPressure(defenderShip)
   const jitter = randUniform(rand, -trackingJitterForPilot(pilotSkill), trackingJitterForPilot(pilotSkill))
-  const mergePenalty = inMergeWindow ? TRACKING_MERGE_PENALTY * (1 - s) : 0
-  return clamp01(0.18 + s * 0.34 + handling * 0.26 + rangeFactor * 0.30 - defensivePressure - mergePenalty + jitter)
+  const mergePenalty = inMergeWindow
+    ? TRACKING_MERGE_PENALTY * (1 - s) * mergeManeuverMultiplier(attackerShip, defenderShip)
+    : 0
+  return clamp01(0.16 + s * 0.34 + attackerControl * 0.29 + rangeFactor * 0.29 - defenderPressure - mergePenalty + jitter)
+}
+
+function trackingControlScore(ship) {
+  const accuracy = Number(ship?.accuracy) || 0.6
+  const evasion = Number(ship?.evasion) || 0.25
+  const strafe = normalizedShipField(ship, 'strafeThrusterScore', evasion)
+  const boost = normalizedShipField(ship, 'boostThrusterScore', evasion)
+  const thrusters = normalizedShipField(ship, 'thrusterScore', evasion)
+  return clamp01(0.34 + accuracy * 0.28 + evasion * 0.12 + strafe * 0.12 + boost * 0.06 + thrusters * 0.08)
+}
+
+function defensiveManeuverPressure(ship) {
+  const evasion = Number(ship?.evasion) || 0.25
+  const strafe = normalizedShipField(ship, 'strafeThrusterScore', evasion)
+  const boost = normalizedShipField(ship, 'boostThrusterScore', evasion)
+  const thrusters = normalizedShipField(ship, 'thrusterScore', evasion)
+  return clamp01(0.12 + evasion * 0.40 + strafe * 0.18 + boost * 0.08 + thrusters * 0.08)
+}
+
+function mergeManeuverMultiplier(attackerShip, defenderShip) {
+  const attackerBoost = normalizedShipField(attackerShip, 'boostThrusterScore', attackerShip?.evasion ?? 0.25)
+  const defenderBoost = normalizedShipField(defenderShip, 'boostThrusterScore', defenderShip?.evasion ?? 0.25)
+  const defenderStrafe = normalizedShipField(defenderShip, 'strafeThrusterScore', defenderShip?.evasion ?? 0.25)
+  return clamp(1 + defenderBoost * 0.22 + defenderStrafe * 0.18 - attackerBoost * 0.18, 0.82, 1.35)
+}
+
+function normalizedShipField(ship, field, fallback = 0.25) {
+  const value = Number(ship?.[field])
+  if (Number.isFinite(value)) return clamp01(value)
+  return clamp01(Number(fallback) || 0)
 }
 
 function trackingJitterForPilot(pilotSkill) {
@@ -675,14 +708,15 @@ function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand,
     state.capHold = false
   }
 
-  let capStarved = wantsFire && state.capHold
-  if (!wantsFire || state.capHold) {
+  let capStarved = false
+  if (!wantsFire) {
     readyWeaponGroups(state, groups)
     regenerateWeaponCap(state, profile)
-    return emptyFireResult(capStarved)
+    return emptyFireResult(false)
   }
 
   const result = emptyFireResult(false)
+  let energyShotFired = false
 
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i]
@@ -690,8 +724,9 @@ function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand,
     state.weaponCharge[i] = Math.min(interval + TICK_RATE, state.weaponCharge[i] + TICK_RATE)
 
     let safety = 0
-    while (state.weaponCharge[i] >= interval && safety < 20 && !state.capHold) {
+    while (state.weaponCharge[i] >= interval && safety < 20) {
       let volleyFired = false
+      let blockedByCapacitor = false
       const projectiles = Math.max(1, Math.round(Number(group.count) || 1))
 
       for (let p = 0; p < projectiles; p++) {
@@ -701,13 +736,24 @@ function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand,
         }
 
         const capCost = weaponCapCost(group, profile)
+        if (capCost > 0 && state.capHold) {
+          capStarved = true
+          blockedByCapacitor = true
+          break
+        }
+
         if (state.weaponCap < capCost) {
           state.capHold = true
           capStarved = true
+          blockedByCapacitor = true
           break
         }
 
         state.weaponCap = Math.max(0, state.weaponCap - capCost)
+        if (capCost > 0) {
+          energyShotFired = true
+          if (state.weaponCap < capCost) state.capHold = true
+        }
         if (Number.isFinite(state.weaponAmmo[i])) {
           state.weaponAmmo[i] = Math.max(0, state.weaponAmmo[i] - 1)
           result.ammoSpent++
@@ -730,13 +776,18 @@ function resolveWeaponFire(state, profile, wantsFire, hitChance, variance, rand,
         }
       }
 
-      if (!volleyFired) break
+      if (!volleyFired) {
+        if (blockedByCapacitor) {
+          state.weaponCharge[i] = Math.min(state.weaponCharge[i], interval)
+        }
+        break
+      }
       state.weaponCharge[i] -= interval
       safety++
     }
   }
 
-  if (result.shots <= 0) {
+  if (!energyShotFired) {
     regenerateWeaponCap(state, profile)
   }
 
@@ -1021,6 +1072,7 @@ function applyDamage(state, impacts, defenderShip) {
       const penetration = penetrationModel(impact.penetration, impact.impactRangeM, impact.weaponRangeM)
       let shieldApplied = 0
       let hullApplied = 0
+      const shieldWasDown = state.shield <= 0
 
       if (state.shield > 0) {
         const bleed = shieldBleedForDamage(type, penetration)
@@ -1036,15 +1088,18 @@ function applyDamage(state, impacts, defenderShip) {
           ? Math.max(0, shieldScaled - shieldApplied) / shieldMult
           : 0
         hullApplied = applyHullDamage(state, hullRaw + overflowRaw, type, penetration, defenderShip)
-
-        if (shieldScaled > 0 || hullRaw > 0) {
-          state.shieldTimer = Math.round((defenderShip.shieldCooldown ?? 5) / TICK_RATE)
-        }
       } else {
         hullApplied = applyHullDamage(state, base, type, penetration, defenderShip)
       }
 
       const applied = shieldApplied + hullApplied
+      if (applied > 0) {
+        resetShieldRegenDelay(state, defenderShip, {
+          shieldWasDown,
+          shieldBecameDown: state.shield <= 0 && !shieldWasDown,
+        })
+      }
+
       result.total += applied
       result.shieldDamage += shieldApplied
       result.hullDamage += hullApplied
@@ -1053,6 +1108,14 @@ function applyDamage(state, impacts, defenderShip) {
   })
 
   return result
+}
+
+function resetShieldRegenDelay(state, ship, { shieldWasDown = false, shieldBecameDown = false } = {}) {
+  const delaySec = shieldWasDown || shieldBecameDown
+    ? shieldDownedDelayForShip(ship)
+    : shieldDamagedDelayForShip(ship)
+  const delayTicks = Math.max(0, Math.round(delaySec / TICK_RATE))
+  state.shieldTimer = Math.max(state.shieldTimer ?? 0, delayTicks)
 }
 
 function applyHullDamage(state, rawDamage, type, penetration, ship) {
@@ -1077,6 +1140,21 @@ function shieldBleedForDamage(type, penetration) {
     PHYSICAL_SHIELD_BLEED_MIN,
     PHYSICAL_SHIELD_BLEED_MAX
   )
+}
+
+function shieldDamagedDelayForShip(ship) {
+  const damagedDelay = Number(ship?.shieldDamagedDelay)
+  if (Number.isFinite(damagedDelay) && damagedDelay >= 0) return damagedDelay
+
+  const legacyDelay = Number(ship?.shieldCooldown)
+  return Number.isFinite(legacyDelay) && legacyDelay >= 0 ? legacyDelay : 5
+}
+
+function shieldDownedDelayForShip(ship) {
+  const downedDelay = Number(ship?.shieldDownedDelay)
+  if (Number.isFinite(downedDelay) && downedDelay >= 0) return downedDelay
+
+  return Math.max(shieldDamagedDelayForShip(ship) * 2, shieldDamagedDelayForShip(ship))
 }
 
 function hullMultiplierForDamage(type, penetration, ship) {

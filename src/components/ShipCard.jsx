@@ -1,7 +1,6 @@
 /**
  * ShipCard.jsx
- * Muestra las estadísticas de una nave con barras visuales.
- * Recibe el objeto ship de ships.js y el lado ('a' | 'b').
+ * Ficha de combate centrada en datos reales de nave y metricas calculadas.
  */
 
 export function ShipCard({
@@ -13,24 +12,20 @@ export function ShipCard({
   onSelectWeapon,
   onSelectComponent,
 }) {
-  const isA    = side === 'a'
-  const color  = isA ? '#378ADD' : '#D85A30'
-  const shield = isA ? '#1D9E75' : '#EF9F27'
+  const isA = side === 'a'
+  const color = isA ? '#378ADD' : '#D85A30'
   const weaponBank = ship.weaponBank ?? {}
-  const weaponCap = Number(weaponBank.capacity) || 0
-  const weaponDrain = Number(weaponBank.drainPerSec) || 0
-  const weaponRegen = Number(weaponBank.regenPerSec) || 0
-  const powerPlantRatio = Number(weaponBank.powerPlantEnergyRatio) || 1
-  const weaponSource = weaponBank.dataSource ?? 'mock'
-  const shipSource = ship.shipDataSource ?? 'mock'
-  const rawWeaponDps = Number(weaponBank.totalBurstDps) || 0
-  const ammoCapacity = Number(weaponBank.ammoCapacity) || 0
-  const ballisticWeaponCount = Number(weaponBank.ballisticWeaponCount) || 0
+  const weaponSource = ship.combatMetrics?.weaponry?.dpsSource ?? weaponBank.dataSource ?? 'mock'
+  const shipSource = ship.combatMetrics?.displaySource ?? ship.shipDataSource ?? 'mock'
   const weaponSlots = ship.configurationSlots?.weapons ?? []
   const componentSlots = ship.configurationSlots?.components ?? []
-  const armorPct = Number(ship.armorReductionPct) || 0
-  const hullScale = Math.max(15000, ship.hullMax)
-  const shieldScale = Math.max(10000, ship.shieldMax)
+  const metrics = ship.combatMetrics ?? {}
+  const hull = metrics.hull ?? {}
+  const weaponry = metrics.weaponry ?? {}
+  const armor = metrics.armor ?? {}
+  const flight = metrics.flight ?? {}
+  const computed = metrics.computed ?? {}
+  const accelerations = flight.accelerations ?? {}
 
   const shipList = Object.values(ships).sort((s1, s2) => {
     const m = s1.manufacturer.localeCompare(s2.manufacturer)
@@ -45,25 +40,8 @@ export function ShipCard({
     return acc
   }, {})
 
-  const bars = [
-    { label: 'Casco',     value: ship.hullMax,    max: hullScale,   pct: ship.hullMax / hullScale,       col: color  },
-    { label: 'Blindaje',  value: `${armorPct}%`,   max: 30,          pct: armorPct / 30,                  col: '#6F665A' },
-    { label: 'Escudos',   value: ship.shieldMax,  max: shieldScale, pct: ship.shieldMax / shieldScale,   col: shield },
-    { label: 'Regen/s',   value: ship.shieldRegen,max: 600,         pct: ship.shieldRegen / 600,         col: shield },
-    { label: 'Capacitor', value: weaponCap,        max: 190,   pct: weaponCap / 190,        col: '#7D6B2D' },
-    { label: 'Soporte',   value: `${powerPlantRatio.toFixed(2)}x`, max: 1.25, pct: Math.min(powerPlantRatio / 1.25, 1), col: '#6B7FD7' },
-    { label: 'Consumo/s', value: weaponDrain.toFixed(1), max: 62, pct: weaponDrain / 62,    col: '#BA7517' },
-    { label: 'Recarga/s', value: weaponRegen.toFixed(1), max: 36, pct: weaponRegen / 36,    col: '#1D9E75' },
-    { label: 'Mun. bal.', value: ballisticWeaponCount > 0 ? ammoCapacity : '—', max: 6000, pct: ammoCapacity > 0 ? ammoCapacity / 6000 : 0, col: '#8B6F3D' },
-    { label: 'Precisión', value: `${Math.round(ship.accuracy * 100)}%`, pct: ship.accuracy, col: '#BA7517' },
-    { label: 'Evasión',   value: `${Math.round(ship.evasion * 100)}%`,  pct: ship.evasion,  col: '#888780' },
-    { label: 'Radar',     value: `${ship.radarStrength.toFixed(2)}x`, pct: ship.radarStrength / 1.6, col: '#6B7FD7' },
-    { label: 'Firma',     value: `${ship.signatureProfile.toFixed(2)}x`, pct: ship.signatureProfile / 2.5, col: '#B55E7A' },
-  ]
-
   return (
     <div className="card">
-      {/* Cabecera */}
       <div className="ship-header">
         <i className="ti ti-rocket" style={{ color }} aria-hidden="true" />
         <div className="ship-header-text">
@@ -136,30 +114,160 @@ export function ShipCard({
         </div>
       )}
 
-      {/* DPS destacado */}
-      <div className="dps-badge" style={{ color }}>
-        DPS sim {ship.dps}
-      </div>
-      <div className={`data-source data-source-${weaponSource}`}>
-        Armas: {sourceLabel(weaponSource)}{rawWeaponDps > 0 ? ` · raw ${rawWeaponDps}` : ''}
-      </div>
-      <div className={`data-source data-source-${shipSource}`}>
-        Nave: {sourceLabel(shipSource)}{ship.shipDataVersion ? ` · ${ship.shipDataVersion}` : ''}
+      <div className="combat-sources">
+        <div className={`data-source data-source-${weaponSource}`}>
+          Armas: {sourceLabel(weaponSource)}
+        </div>
+        <div className={`data-source data-source-${shipSource}`}>
+          Nave: {sourceLabel(shipSource)}{ship.shipDataVersion ? ` · ${ship.shipDataVersion}` : ''}
+        </div>
       </div>
 
-      {/* Barras de stats */}
-      <div className="stat-list">
-        {bars.map(({ label, value, pct, col }) => (
-          <div key={label} className="stat-row">
-            <span className="stat-label">{label}</span>
-            <div className="bar-wrap">
-              <div className="bar-fill" style={{ width: `${Math.min(pct * 100, 100)}%`, background: col }} />
-            </div>
-            <span className="stat-value">{value}</span>
-          </div>
-        ))}
+      <div className="ship-combat-grid">
+        <SpecSection title="Casco">
+          <SpecRow label="Dimensiones" value={hull.dimensionsLabel ?? '—'} />
+          <SpecRow label="Masa" value={hull.massKg ? `${formatNumber(hull.massKg)} kg` : '—'} />
+          <SpecRow label="HP total" value={hull.totalHealthHp ? `${formatNumber(hull.totalHealthHp)} HP` : '—'} />
+        </SpecSection>
+
+        <SpecSection title="Armamento">
+          <SpecRow
+            label="Pilot DPS"
+            value={weaponry.pilotBurstDps ? `${formatNumber(weaponry.pilotSustainedDps)} sust. / ${formatNumber(weaponry.pilotBurstDps)} burst` : '—'}
+          />
+          <SpecRow label="Alpha" value={weaponry.pilotAlpha ? formatNumber(weaponry.pilotAlpha) : '—'} />
+          <SpecRow
+            label="Misiles"
+            value={weaponry.missileDamage ? `${formatNumber(weaponry.missileDamage)} dmg` : '—'}
+            sub={weaponry.missileCount ? `${weaponry.missileCount} misiles` : null}
+          />
+          <SpecRow label="Escudo" value={weaponry.shieldBubbleHp ? `${formatNumber(weaponry.shieldBubbleHp)} HP` : '—'} />
+          <SpecRow
+            label="Mun. bal."
+            value={weaponry.ballisticAmmo ? formatNumber(weaponry.ballisticAmmo) : '—'}
+            sub={weaponry.ballisticWeaponCount ? `${weaponry.ballisticWeaponCount} armas balísticas` : null}
+          />
+        </SpecSection>
+
+        <SpecSection title="Blindaje">
+          <SpecRow
+            label="Casco efectivo"
+            value={(
+              <ValueTooltip
+                value={joinParts([
+                  numberPart('Físico', armor.effectiveHullHp?.physical, 'HP'),
+                  numberPart('Energía', armor.effectiveHullHp?.energy, 'HP'),
+                ])}
+                tooltipTitle="Cómo se calcula"
+                tooltipLines={effectiveHullTooltipLines(hull, armor)}
+              />
+            )}
+            sub={armor.apiHealthHp ? `Armor health API: ${formatNumber(armor.apiHealthHp)} HP` : null}
+          />
+          <SpecRow
+            label="Mod. daño"
+            value={joinParts([
+              pctPart('Físico', armor.damageModifiers?.physical),
+              pctPart('Energía', armor.damageModifiers?.energy),
+              pctPart('Dist.', armor.damageModifiers?.distortion),
+            ])}
+          />
+          <SpecRow
+            label="Durabilidad"
+            value={joinParts([
+              pctPart('Físico', armor.durabilityModifiers?.physical),
+              pctPart('Energía', armor.durabilityModifiers?.energy),
+            ])}
+          />
+          <SpecRow
+            label="Mod. firma"
+            value={joinParts([
+              pctPart('EM', armor.signatureModifiers?.electromagnetic),
+              pctPart('CS', armor.signatureModifiers?.crossSection),
+              pctPart('IR', armor.signatureModifiers?.infrared),
+            ])}
+          />
+          <SpecRow
+            label="Deflexión"
+            value={joinParts([
+              numberPart('Físico', armor.deflection?.physical),
+              numberPart('Energía', armor.deflection?.energy),
+            ])}
+          />
+          <SpecRow
+            label="Resist. pen."
+            value={joinParts([
+              pctPart('Físico', armor.penetrationResistance?.physical),
+              pctPart('Energía', armor.penetrationResistance?.energy),
+            ])}
+          />
+        </SpecSection>
+
+        <SpecSection title="Vuelo">
+          <SpecRow label="SCM / Boost" value={joinParts([flight.scm ? `${flight.scm} m/s` : null, flight.forwardBoost ? `${flight.forwardBoost} m/s` : null], ' / ')} />
+          <SpecRow label="NAV" value={flight.nav ? `${flight.nav} m/s` : '—'} />
+          <SpecRow label="Zero a SCM" value={ship.zeroToScm ? `${formatNumber(ship.zeroToScm)} s` : '—'} />
+          <SpecRow label="Pitch / Yaw / Roll" value={joinParts([flight.pitch, flight.yaw, flight.roll].map(formatAngle), ' / ')} />
+          <SpecRow label="Boosted" value={joinParts([flight.pitchBoosted, flight.yawBoosted, flight.rollBoosted].map(formatAngle), ' / ')} />
+        </SpecSection>
+
+        <SpecSection title="Aceleraciones" subtitle={accelerations.estimated ? 'Estimadas en G' : null}>
+          <SpecRow label="Main" value={formatAcceleration(accelerations.main)} />
+          <SpecRow label="Retro" value={formatAcceleration(accelerations.retro)} />
+          <SpecRow label="Up" value={formatAcceleration(accelerations.up)} />
+          <SpecRow label="Down" value={formatAcceleration(accelerations.down)} />
+          <SpecRow label="Strafe" value={formatAcceleration(accelerations.strafe)} />
+        </SpecSection>
+
+        <SpecSection title="Cálculo">
+          <SpecRow label="Precisión" value={computed.precisionPct !== undefined ? `${computed.precisionPct}%` : '—'} />
+          <SpecRow label="Evasión" value={computed.evasionPct !== undefined ? `${computed.evasionPct}%` : '—'} />
+          <SpecRow label="Maniobr." value={computed.maneuverabilityPct !== undefined ? `${computed.maneuverabilityPct}%` : '—'} />
+        </SpecSection>
       </div>
     </div>
+  )
+}
+
+function SpecSection({ title, subtitle, children }) {
+  return (
+    <section className="ship-spec-section">
+      <div className="ship-spec-title-row">
+        <h3 className="ship-spec-title">{title}</h3>
+        {subtitle ? <span className="ship-spec-subtitle">{subtitle}</span> : null}
+      </div>
+      <div className="ship-spec-list">{children}</div>
+    </section>
+  )
+}
+
+function SpecRow({ label, value, sub = null }) {
+  return (
+    <div className="ship-spec-row">
+      <span className="ship-spec-label">{label}</span>
+      <div className="ship-spec-value-wrap">
+        {typeof value === 'string' ? <span className="ship-spec-value">{value || '—'}</span> : (value || <span className="ship-spec-value">—</span>)}
+        {sub ? <span className="ship-spec-row-sub">{sub}</span> : null}
+      </div>
+    </div>
+  )
+}
+
+function ValueTooltip({ value, tooltipTitle, tooltipLines }) {
+  const lines = Array.isArray(tooltipLines) ? tooltipLines.filter(Boolean) : []
+
+  return (
+    <span className="ship-value-tooltip" tabIndex={0}>
+      <span className="ship-spec-value ship-spec-value-tooltip-trigger">{value || '—'}</span>
+      {lines.length > 0 ? (
+        <span className="ship-value-tooltip-popup" role="tooltip">
+          {tooltipTitle ? <span className="ship-value-tooltip-title">{tooltipTitle}</span> : null}
+          {lines.map((line) => (
+            <span key={line} className="ship-value-tooltip-line">{line}</span>
+          ))}
+        </span>
+      ) : null}
+    </span>
   )
 }
 
@@ -186,6 +294,61 @@ function LoadoutSelect({ id, label, value, baseLabel, options, onChange }) {
 
 function sourceLabel(source) {
   if (source === 'real') return 'datos reales'
-  if (source === 'mixed') return 'real + fallback'
+  if (source === 'mixed') return 'real + estimado'
+  if (source === 'estimated') return 'estimado'
   return 'fallback mock'
+}
+
+function joinParts(parts, separator = ' · ') {
+  const values = parts.filter(Boolean)
+  return values.length > 0 ? values.join(separator) : '—'
+}
+
+function pctPart(label, value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return null
+  const n = Number(value)
+  const sign = n > 0 ? '+' : ''
+  return `${label} ${sign}${Math.round(n)}%`
+}
+
+function numberPart(label, value, suffix = '') {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return null
+  return `${label} ${formatNumber(value)}${suffix ? ` ${suffix}` : ''}`
+}
+
+function effectiveHullTooltipLines(hull, armor) {
+  const hullHp = Number(hull?.totalHealthHp) || 0
+  const physicalMultiplier = Number(armor?.rawDamageMultipliers?.physical)
+  const energyMultiplier = Number(armor?.rawDamageMultipliers?.energy)
+  const physicalEffective = armor?.effectiveHullHp?.physical
+  const energyEffective = armor?.effectiveHullHp?.energy
+
+  return [
+    hullHp > 0 ? `Casco base: ${formatNumber(hullHp)} HP` : null,
+    'Fórmula: casco base / multiplicador de daño',
+    Number.isFinite(physicalMultiplier) && physicalEffective
+      ? `Físico: ${formatNumber(hullHp)} / ${formatNumber(physicalMultiplier)} = ${formatNumber(physicalEffective)} HP`
+      : null,
+    Number.isFinite(energyMultiplier) && energyEffective
+      ? `Energía: ${formatNumber(hullHp)} / ${formatNumber(energyMultiplier)} = ${formatNumber(energyEffective)} HP`
+      : null,
+    'Solo cuenta cuando el daño ya atraviesa el escudo y entra al casco.',
+  ]
+}
+
+function formatNumber(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return Number.isInteger(n) ? n.toLocaleString('es-ES') : n.toLocaleString('es-ES', { maximumFractionDigits: 1 })
+}
+
+function formatAngle(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return `${formatNumber(n)} º/s`
+}
+
+function formatAcceleration(entry) {
+  if (!entry || entry.base === null || entry.base === undefined) return '—'
+  return `${formatNumber(entry.base)} (${formatNumber(entry.boosted)}) G`
 }
