@@ -4,7 +4,7 @@
  * Llama a updateConfig del hook y a simulate al pulsar el botón.
  */
 
-export function SimControls({ config, updateConfig, simulate, isRunning }) {
+export function SimControls({ config, updateConfig, simulate, isRunning, shipAName, shipBName }) {
   const isTimed = config.mode === 'timed'
   const isStatic = config.mode === 'static'
   const isMulti = config.multiSim
@@ -127,7 +127,7 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
               checked={Boolean(config.staticFireA)}
               onChange={(e) => updateConfig({ staticFireA: e.target.checked })}
             />
-            <span>Dispara Alfa</span>
+            <span>Dispara {shipAName}</span>
           </label>
           <label className="check-row">
             <input
@@ -135,10 +135,10 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
               checked={Boolean(config.staticFireB)}
               onChange={(e) => updateConfig({ staticFireB: e.target.checked })}
             />
-            <span>Dispara Beta</span>
+            <span>Dispara {shipBName}</span>
           </label>
           <p className="sim-hint">
-            Ambos marcados: ambos disparan. Si solo marcas uno, solo dispara ese bando.
+            Ambos marcados: disparan las dos naves. Si solo marcas uno, solo dispara esa nave.
           </p>
         </div>
       )}

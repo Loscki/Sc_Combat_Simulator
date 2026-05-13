@@ -32,9 +32,9 @@ function SummaryShipColumn({ side, shipName, children }) {
       <div className="ship-metric-header">
         <div>
           <div className="ship-metric-title">{shipName}</div>
-          <div className="ship-metric-meta">{isA ? 'Alfa' : 'Beta'}</div>
+          <div className="ship-metric-meta">Resumen agregado</div>
         </div>
-        <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{isA ? 'Alfa' : 'Beta'}</span>
+        <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{shipName}</span>
       </div>
       <div className="ship-metric-list">{children}</div>
     </div>
@@ -51,6 +51,24 @@ function formatAmmoSummary(avgRemaining, avgRemainingPct, totalRemaining) {
   }
 }
 
+function formatBlackoutSummary(avgG, avgMaxG) {
+  const g = Number(avgG)
+  const maxG = Number(avgMaxG)
+  return {
+    value: Number.isFinite(g) && g > 0 ? `${g.toFixed(1)} G` : '0.0 G',
+    sub: Number.isFinite(maxG) && maxG > 0
+      ? `Media en maniobra · pico medio ${maxG.toFixed(1)} G`
+      : 'Sin carga G relevante',
+  }
+}
+
+function formatOpportunityUseSummary(avgFireTime, avgDps, totalShots, totalHits, totalDmg) {
+  return {
+    value: `${Math.round(Number(totalDmg) || 0)} daño`,
+    sub: `${(Number(avgDps) || 0).toFixed(1)} daño/s · ${(Number(avgFireTime) || 0).toFixed(1)}s disparando · ${Math.round(Number(totalShots) || 0)}/${Math.round(Number(totalHits) || 0)} disparos/impactos`,
+  }
+}
+
 export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
   if (!summary) return null
 
@@ -60,6 +78,16 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
   const ammoB = summary.hasBallisticsB
     ? formatAmmoSummary(summary.avgAmmoRemainingB, summary.avgAmmoRemainingPctB, summary.totalAmmoRemainingB)
     : null
+  const blackoutA = formatBlackoutSummary(summary.avgGForceA, summary.avgBlackoutMaxGA)
+  const blackoutB = formatBlackoutSummary(summary.avgGForceB, summary.avgBlackoutMaxGB)
+  const opportunityUseA = formatOpportunityUseSummary(summary.avgOpportunityFireTimeA, summary.avgOpportunityDpsA, summary.totalOpportunityShotsA, summary.totalOpportunityHitsA, summary.totalOpportunityDmgA)
+  const opportunityUseB = formatOpportunityUseSummary(summary.avgOpportunityFireTimeB, summary.avgOpportunityDpsB, summary.totalOpportunityShotsB, summary.totalOpportunityHitsB, summary.totalOpportunityDmgB)
+  const balanceLabel =
+    summary.winsA === summary.winsB
+      ? 'Igualado'
+      : summary.winsA > summary.winsB
+        ? `Ventaja ${shipAName}`
+        : `Ventaja ${shipBName}`
 
   return (
     <div className="results-panel">
@@ -77,13 +105,7 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
         />
         <SummaryMetric
           label="Balance"
-          value={
-            summary.winsA === summary.winsB
-              ? 'Igualado'
-              : summary.winsA > summary.winsB
-                ? 'Ventaja Alfa'
-                : 'Ventaja Beta'
-          }
+          value={balanceLabel}
         />
         <SummaryMetric
           label="Total simulaciones"
@@ -116,6 +138,16 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
             label="Ventana de fuego media"
             value={`${Math.round(summary.avgFireUptimeA)}%`}
             sub={`Capacitor medio: ${Math.round(summary.avgWeaponCapA)}%`}
+          />
+          <SummaryShipRow
+            label="Aprovechamiento medio"
+            value={opportunityUseA.value}
+            sub={opportunityUseA.sub}
+          />
+          <SummaryShipRow
+            label="Fuerza G media"
+            value={blackoutA.value}
+            sub={blackoutA.sub}
           />
           {ammoA && (
             <SummaryShipRow
@@ -155,6 +187,16 @@ export function MultiSummaryPanel({ summary, shipAName, shipBName }) {
             label="Ventana de fuego media"
             value={`${Math.round(summary.avgFireUptimeB)}%`}
             sub={`Capacitor medio: ${Math.round(summary.avgWeaponCapB)}%`}
+          />
+          <SummaryShipRow
+            label="Aprovechamiento medio"
+            value={opportunityUseB.value}
+            sub={opportunityUseB.sub}
+          />
+          <SummaryShipRow
+            label="Fuerza G media"
+            value={blackoutB.value}
+            sub={blackoutB.sub}
           />
           {ammoB && (
             <SummaryShipRow

@@ -24,6 +24,14 @@ export function ShipCard({
   const shipSource = ship.combatMetrics?.displaySource ?? ship.shipDataSource ?? 'mock'
   const weaponSlots = ship.configurationSlots?.weapons ?? []
   const componentSlots = ship.configurationSlots?.components ?? []
+  const fixedSystemLines = buildFixedSystemLines(ship.realVehicle?.components)
+  const fixedWeaponLines = Array.isArray(ship.currentLoadout?.weapons)
+    ? ship.currentLoadout.weapons.filter((line) => String(line).startsWith('Arma de serie'))
+    : []
+  const fixedWeaponCount = fixedWeaponLines.reduce((sum, line) => {
+    const match = String(line).match(/×(\d+)/)
+    return sum + (match ? Number(match[1]) || 0 : 1)
+  }, 0)
   const metrics = ship.combatMetrics ?? {}
   const hull = metrics.hull ?? {}
   const weaponry = metrics.weaponry ?? {}
@@ -54,19 +62,19 @@ export function ShipCard({
         <i className="ti ti-rocket" style={{ color }} aria-hidden="true" />
         <div className="ship-header-text">
           <span className="ship-name">{ship.name}</span>
-          <span className="ship-meta">{ship.role} · {weaponBank.weaponCount ?? 0} armas</span>
+          <span className="ship-meta">{formatShipWeaponMeta(ship.role, weaponBank.weaponCount, weaponSlots.length, fixedWeaponCount)}</span>
         </div>
-        <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{isA ? 'Alfa' : 'Beta'}</span>
+        <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{ship.name}</span>
       </div>
 
       <ShipHeroImage ship={ship} color={color} />
 
-      <div className="ship-select-row" aria-label={`Selector de nave ${isA ? 'Alfa' : 'Beta'}`}>
+      <div className="ship-select-row" aria-label={`Selector de nave ${ship.name}`}>
         <select
           className="ship-select"
           value={shipId}
           onChange={(e) => onSelectShip(e.target.value)}
-          aria-label={`Elegir nave para bando ${isA ? 'Alfa' : 'Beta'}`}
+          aria-label={`Elegir nave para ${ship.name}`}
         >
           {Object.entries(grouped).map(([manufacturer, list]) => (
             <optgroup key={manufacturer} label={manufacturer}>
@@ -81,12 +89,13 @@ export function ShipCard({
       </div>
 
       {(weaponSlots.length > 0 || componentSlots.length > 0) && (
-        <div className="loadout-configurator" aria-label={`Configurador de nave ${isA ? 'Alfa' : 'Beta'}`}>
+        <div className="loadout-configurator" aria-label={`Configurador de nave ${ship.name}`}>
           {weaponSlots.length > 0 && (
             <div className="config-group">
               <div className="config-group-title">
                 <i className="ti ti-target" aria-hidden="true" />
                 <span>Armas compatibles</span>
+                <span className="config-editable-badge">Editable</span>
               </div>
               {weaponSlots.map((slot) => (
                 <LoadoutSelect
@@ -102,11 +111,32 @@ export function ShipCard({
             </div>
           )}
 
+          {fixedWeaponLines.length > 0 && (
+            <div className="config-group config-group-fixed">
+              <div className="config-group-title">
+                <i className="ti ti-lock" aria-hidden="true" />
+                <span>Armas de serie</span>
+                <span className="config-fixed-badge">No configurable</span>
+              </div>
+              <div className="config-fixed-list" aria-label={`Armas de serie de ${ship.name}`}>
+                {fixedWeaponLines.map((line) => (
+                  <div key={line} className="config-fixed-item">
+                    <span className="config-fixed-item-icon">
+                      <i className="ti ti-lock" aria-hidden="true" />
+                    </span>
+                    <span className="config-fixed-item-text">{formatFixedWeaponLine(line)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {componentSlots.length > 0 && (
             <div className="config-group">
               <div className="config-group-title">
                 <i className="ti ti-adjustments" aria-hidden="true" />
                 <span>Componentes compatibles</span>
+                <span className="config-editable-badge">Editable</span>
               </div>
               {componentSlots.map((slot) => (
                 <LoadoutSelect
@@ -121,6 +151,26 @@ export function ShipCard({
               ))}
             </div>
           )}
+
+          {fixedSystemLines.length > 0 && (
+            <div className="config-group config-group-fixed">
+              <div className="config-group-title">
+                <i className="ti ti-package" aria-hidden="true" />
+                <span>Sistemas de serie</span>
+                <span className="config-fixed-badge">No configurable</span>
+              </div>
+              <div className="config-fixed-list" aria-label={`Sistemas de serie de ${ship.name}`}>
+                {fixedSystemLines.map((line) => (
+                  <div key={line} className="config-fixed-item">
+                    <span className="config-fixed-item-icon">
+                      <i className="ti ti-package" aria-hidden="true" />
+                    </span>
+                    <span className="config-fixed-item-text">{line}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -133,6 +183,7 @@ export function ShipCard({
           mastery={mastery}
           side={side}
           onPilotSkillChange={onPilotSkillChange}
+          shipName={ship.name}
         />
       )}
 
@@ -279,10 +330,9 @@ function ShipHeroImage({ ship, color }) {
   )
 }
 
-function PilotEfficiencyPanel({ color, curve, currentSkill, currentPoint, mastery, side, onPilotSkillChange }) {
+function PilotEfficiencyPanel({ color, curve, currentSkill, currentPoint, mastery, side, onPilotSkillChange, shipName }) {
   const pivot = Number(mastery?.pivotSkill)
   const demandPct = Number(mastery?.demandPct)
-  const sideLabel = side === 'a' ? 'Alfa' : 'Beta'
   const chartMax = efficiencyChartMax(curve)
   const yTicks = efficiencyChartTicks(chartMax)
 
@@ -354,7 +404,7 @@ function PilotEfficiencyPanel({ color, curve, currentSkill, currentPoint, master
       <div className="ship-mastery-skill-control">
         <div className="section-label">Nivel del piloto</div>
         <div className="slider-row pilot-skill-row ship-card-skill-row">
-          <span className={`pilot-skill-label tag tag-${side === 'a' ? 'blue' : 'coral'}`}>{sideLabel}</span>
+          <span className={`pilot-skill-label tag tag-${side === 'a' ? 'blue' : 'coral'}`}>{shipName}</span>
           <input
             type="range"
             min={0}
@@ -362,7 +412,7 @@ function PilotEfficiencyPanel({ color, curve, currentSkill, currentPoint, master
             step={0.1}
             value={currentSkill}
             onChange={(e) => onPilotSkillChange?.(Number(e.target.value))}
-            aria-label={`Habilidad del piloto ${sideLabel}`}
+            aria-label={`Habilidad del piloto ${shipName}`}
           />
           <span className="slider-val">{formatSkill(currentSkill)}</span>
         </div>
@@ -455,6 +505,42 @@ function sourceLabel(source) {
   if (source === 'mixed') return 'real + estimado'
   if (source === 'estimated') return 'estimado'
   return 'fallback mock'
+}
+
+function formatShipWeaponMeta(role, totalWeaponCount, configurableCount, fixedCount) {
+  const total = Math.max(0, Number(totalWeaponCount) || 0)
+  const configurable = Math.max(0, Number(configurableCount) || 0)
+  const fixed = Math.max(0, Number(fixedCount) || 0)
+
+  if (fixed > 0 || configurable > total) {
+    const parts = []
+    if (configurable > 0) parts.push(`${configurable} configurables`)
+    if (fixed > 0) parts.push(`${fixed} de serie`)
+    return `${role} · ${total} armas cargadas${parts.length > 0 ? ` (${parts.join(' + ')})` : ''}`
+  }
+
+  return `${role} · ${total} armas`
+}
+
+function formatFixedWeaponLine(line) {
+  return String(line).replace(/^Arma de serie \d+:\s*/i, '')
+}
+
+function buildFixedSystemLines(components) {
+  if (!Array.isArray(components)) return []
+
+  return components
+    .filter((component) => {
+      const type = String(component?.type ?? '')
+      return type && type !== 'weapons' && !['shield_generators', 'power_plants', 'coolers', 'radar'].includes(type)
+    })
+    .map((component) => {
+      const mounts = Math.max(1, Number(component.mounts) || Number(component.quantity) || 1)
+      const size = String(component.componentSize ?? component.size ?? '').toUpperCase()
+      const sizeLabel = size ? `S${size}` : ''
+      const mountsLabel = mounts > 1 ? ` · ${mounts}x` : ''
+      return `${component.name}${sizeLabel ? ` ${sizeLabel}` : ''}${mountsLabel}`
+    })
 }
 
 const SHIP_IMAGE_FILE_OVERRIDES = {

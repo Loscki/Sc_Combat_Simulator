@@ -3,10 +3,10 @@
  * Lista lateral de simulaciones para seleccionar una run concreta.
  */
 
-const WINNER_LABEL = {
-  a: 'Gana Alfa',
-  b: 'Gana Beta',
-  draw: 'Empate',
+function winnerLabel(run) {
+  if (run?.winner === 'a') return `Gana ${run?.shipA?.name ?? 'Nave A'}`
+  if (run?.winner === 'b') return `Gana ${run?.shipB?.name ?? 'Nave B'}`
+  return 'Empate'
 }
 
 export function SimRunsSidebar({ runs, selectedRunId, onSelectRun }) {
@@ -18,7 +18,7 @@ export function SimRunsSidebar({ runs, selectedRunId, onSelectRun }) {
       <div className="runs-list" role="listbox" aria-label="Seleccionar simulación">
         {runs.map((r) => {
           const isActive = r.id === selectedRunId
-          const winner = WINNER_LABEL[r.winner] ?? 'Resultado'
+          const winner = winnerLabel(r)
           const km = (Number(r.initialRangeM ?? r.initialRangeMUsed ?? 0) / 1000) || null
           return (
             <button
@@ -42,4 +42,3 @@ export function SimRunsSidebar({ runs, selectedRunId, onSelectRun }) {
     </div>
   )
 }
-

@@ -84,6 +84,30 @@ function formatOpportunity(stats) {
   }
 }
 
+function formatOpportunityUse(stats) {
+  const fireTime = Number(stats.opportunityFireTimeSec) || 0
+  const shots = Math.max(0, Math.round(Number(stats.opportunityShots) || 0))
+  const hits = Math.max(0, Math.round(Number(stats.opportunityHits) || 0))
+  const dps = Number(stats.opportunityDps) || 0
+  const dmg = Math.max(0, Math.round(Number(stats.opportunityDmg) || 0))
+
+  return {
+    value: `${dmg} daño`,
+    sub: `${dps.toFixed(1)} daño/s · ${fireTime.toFixed(1)}s disparando · ${shots}/${hits} disparos/impactos`,
+  }
+}
+
+function formatBlackout(stats) {
+  const avgG = Number(stats.gForceAvg)
+  const maxG = Number(stats.blackoutMaxG)
+  return {
+    value: Number.isFinite(avgG) && avgG > 0 ? `${avgG.toFixed(1)} G` : '0.0 G',
+    sub: Number.isFinite(maxG) && maxG > 0
+      ? `Media en maniobra · pico ${maxG.toFixed(1)} G`
+      : 'Sin carga G relevante',
+  }
+}
+
 function formatShots(stats) {
   return {
     value: `${stats.shotsFired} / ${stats.hits}`,
@@ -183,6 +207,8 @@ export function ResultsPanel({ result, onReset }) {
   const detectionB = formatDetection(result, 'b')
   const opportunityA = formatOpportunity(stats.a)
   const opportunityB = formatOpportunity(stats.b)
+  const opportunityUseA = formatOpportunityUse(stats.a)
+  const opportunityUseB = formatOpportunityUse(stats.b)
   const shotsA = formatShots(stats.a)
   const shotsB = formatShots(stats.b)
   const avgDamageA = formatAverageDamage(stats.a)
@@ -197,6 +223,8 @@ export function ResultsPanel({ result, onReset }) {
   const ammoB = Number(stats.b.ballisticWeaponCount) > 0 ? formatBallisticAmmo(stats.b) : null
   const reloadsA = formatWeaponReloads(stats.a)
   const reloadsB = formatWeaponReloads(stats.b)
+  const blackoutA = formatBlackout(stats.a)
+  const blackoutB = formatBlackout(stats.b)
 
   return (
     <div className="results-panel">
@@ -257,6 +285,16 @@ export function ResultsPanel({ result, onReset }) {
             sub={opportunityA.sub}
           />
           <ShipMetricRow
+            label="Aprovechamiento de ventana"
+            value={opportunityUseA.value}
+            sub={opportunityUseA.sub}
+          />
+          <ShipMetricRow
+            label="Fuerza G media"
+            value={blackoutA.value}
+            sub={blackoutA.sub}
+          />
+          <ShipMetricRow
             label="Disparos / impactos"
             value={shotsA.value}
             sub={shotsA.sub}
@@ -311,6 +349,16 @@ export function ResultsPanel({ result, onReset }) {
             label="Ventana de oportunidad"
             value={opportunityB.value}
             sub={opportunityB.sub}
+          />
+          <ShipMetricRow
+            label="Aprovechamiento de ventana"
+            value={opportunityUseB.value}
+            sub={opportunityUseB.sub}
+          />
+          <ShipMetricRow
+            label="Fuerza G media"
+            value={blackoutB.value}
+            sub={blackoutB.sub}
           />
           <ShipMetricRow
             label="Disparos / impactos"
