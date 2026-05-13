@@ -4,7 +4,7 @@
  * Llama a updateConfig del hook y a simulate al pulsar el botón.
  */
 
-export function SimControls({ config, updateConfig, simulate, isRunning }) {
+export function SimControls({ config, updateConfig, simulate, isRunning, shipAName, shipBName }) {
   const isTimed = config.mode === 'timed'
   const isStatic = config.mode === 'static'
   const isMulti = config.multiSim
@@ -32,36 +32,9 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
       </div>
 
       {!isStatic ? (
-        <>
-          <div className="section-label">Habilidad del piloto (0–10)</div>
-          <p className="sim-hint">
-            En 5 se usan precisión y evasión de la ficha. Por debajo bajan ambas; por encima suben.
-          </p>
-          <div className="pilot-skills">
-            <div className="slider-row pilot-skill-row">
-              <span className="pilot-skill-label tag tag-blue">Alfa</span>
-              <input
-                type="range"
-                min={0} max={10} step={1}
-                value={config.pilotSkillA}
-                onChange={e => updateConfig({ pilotSkillA: Number(e.target.value) })}
-                aria-label="Habilidad del piloto Alfa"
-              />
-              <span className="slider-val">{config.pilotSkillA}</span>
-            </div>
-            <div className="slider-row pilot-skill-row">
-              <span className="pilot-skill-label tag tag-coral">Beta</span>
-              <input
-                type="range"
-                min={0} max={10} step={1}
-                value={config.pilotSkillB}
-                onChange={e => updateConfig({ pilotSkillB: Number(e.target.value) })}
-                aria-label="Habilidad del piloto Beta"
-              />
-              <span className="slider-val">{config.pilotSkillB}</span>
-            </div>
-          </div>
-        </>
+        <p className="sim-hint">
+          Ajusta el nivel de cada piloto desde la ficha de su nave, justo debajo de la curva por habilidad.
+        </p>
       ) : (
         <div className="static-mode-box">
           <div className="section-label">Banco de pruebas estático</div>
@@ -154,7 +127,7 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
               checked={Boolean(config.staticFireA)}
               onChange={(e) => updateConfig({ staticFireA: e.target.checked })}
             />
-            <span>Dispara Alfa</span>
+            <span>Dispara {shipAName}</span>
           </label>
           <label className="check-row">
             <input
@@ -162,10 +135,10 @@ export function SimControls({ config, updateConfig, simulate, isRunning }) {
               checked={Boolean(config.staticFireB)}
               onChange={(e) => updateConfig({ staticFireB: e.target.checked })}
             />
-            <span>Dispara Beta</span>
+            <span>Dispara {shipBName}</span>
           </label>
           <p className="sim-hint">
-            Ambos marcados: ambos disparan. Si solo marcas uno, solo dispara ese bando.
+            Ambos marcados: disparan las dos naves. Si solo marcas uno, solo dispara esa nave.
           </p>
         </div>
       )}

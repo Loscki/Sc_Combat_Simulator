@@ -195,14 +195,42 @@ function buildSummary(runs) {
   const avgDuration = avg(runs.map(r => r.durationSec))
   const avgHullPctA = avg(runs.map(r => r.stats.a.hullPct))
   const avgHullPctB = avg(runs.map(r => r.stats.b.hullPct))
+  const avgVitalPctA = avg(runs.map(r => r.stats.a.vitalPct))
+  const avgVitalPctB = avg(runs.map(r => r.stats.b.vitalPct))
   const avgTotalHpPctA = avg(runs.map(r => r.stats.a.totalHpPct ?? totalHpPctForRun(r, 'a')))
   const avgTotalHpPctB = avg(runs.map(r => r.stats.b.totalHpPct ?? totalHpPctForRun(r, 'b')))
   const avgEffDpsA = avg(runs.map(r => r.stats.a.effectiveDps))
   const avgEffDpsB = avg(runs.map(r => r.stats.b.effectiveDps))
   const avgFireUptimeA = avg(runs.map(r => r.stats.a.fireUptimePct ?? 0))
   const avgFireUptimeB = avg(runs.map(r => r.stats.b.fireUptimePct ?? 0))
+  const avgOpportunityFireTimeA = avg(runs.map(r => r.stats.a.opportunityFireTimeSec ?? 0))
+  const avgOpportunityFireTimeB = avg(runs.map(r => r.stats.b.opportunityFireTimeSec ?? 0))
+  const avgOpportunityDpsA = avg(runs.map(r => r.stats.a.opportunityDps ?? 0))
+  const avgOpportunityDpsB = avg(runs.map(r => r.stats.b.opportunityDps ?? 0))
+  const totalOpportunityShotsA = runs.reduce((sum, run) => sum + (Number(run.stats.a.opportunityShots) || 0), 0)
+  const totalOpportunityShotsB = runs.reduce((sum, run) => sum + (Number(run.stats.b.opportunityShots) || 0), 0)
+  const totalOpportunityHitsA = runs.reduce((sum, run) => sum + (Number(run.stats.a.opportunityHits) || 0), 0)
+  const totalOpportunityHitsB = runs.reduce((sum, run) => sum + (Number(run.stats.b.opportunityHits) || 0), 0)
+  const totalOpportunityDmgA = runs.reduce((sum, run) => sum + (Number(run.stats.a.opportunityDmg) || 0), 0)
+  const totalOpportunityDmgB = runs.reduce((sum, run) => sum + (Number(run.stats.b.opportunityDmg) || 0), 0)
   const avgWeaponCapA = avg(runs.map(r => r.stats.a.avgWeaponCapPct ?? 100))
   const avgWeaponCapB = avg(runs.map(r => r.stats.b.avgWeaponCapPct ?? 100))
+  const avgBlackoutPctA = avg(runs.map(r => r.stats.a.blackoutPct ?? 0))
+  const avgBlackoutPctB = avg(runs.map(r => r.stats.b.blackoutPct ?? 0))
+  const avgGForceA = avg(runs.map(r => r.stats.a.gForceAvg ?? 0))
+  const avgGForceB = avg(runs.map(r => r.stats.b.gForceAvg ?? 0))
+  const avgBlackoutMaxGA = avg(runs.map(r => r.stats.a.blackoutMaxG ?? 0))
+  const avgBlackoutMaxGB = avg(runs.map(r => r.stats.b.blackoutMaxG ?? 0))
+  const totalReloadsA = runs.reduce((sum, run) => sum + (Number(run.stats.a.weaponReloads) || 0), 0)
+  const totalReloadsB = runs.reduce((sum, run) => sum + (Number(run.stats.b.weaponReloads) || 0), 0)
+  const hasBallisticsA = runs.some((run) => (Number(run.stats.a.ballisticWeaponCount) || 0) > 0)
+  const hasBallisticsB = runs.some((run) => (Number(run.stats.b.ballisticWeaponCount) || 0) > 0)
+  const avgAmmoRemainingA = hasBallisticsA ? avg(runs.map((run) => Number(run.stats.a.ammoRemaining) || 0)) : null
+  const avgAmmoRemainingB = hasBallisticsB ? avg(runs.map((run) => Number(run.stats.b.ammoRemaining) || 0)) : null
+  const avgAmmoRemainingPctA = hasBallisticsA ? avg(runs.map((run) => Number(run.stats.a.ammoRemainingPct) || 0)) : null
+  const avgAmmoRemainingPctB = hasBallisticsB ? avg(runs.map((run) => Number(run.stats.b.ammoRemainingPct) || 0)) : null
+  const totalAmmoRemainingA = hasBallisticsA ? runs.reduce((sum, run) => sum + (Number(run.stats.a.ammoRemaining) || 0), 0) : null
+  const totalAmmoRemainingB = hasBallisticsB ? runs.reduce((sum, run) => sum + (Number(run.stats.b.ammoRemaining) || 0), 0) : null
 
   return {
     total,
@@ -212,14 +240,42 @@ function buildSummary(runs) {
     avgDuration,
     avgHullPctA,
     avgHullPctB,
+    avgVitalPctA,
+    avgVitalPctB,
     avgTotalHpPctA,
     avgTotalHpPctB,
     avgEffDpsA,
     avgEffDpsB,
     avgFireUptimeA,
     avgFireUptimeB,
+    avgOpportunityFireTimeA,
+    avgOpportunityFireTimeB,
+    avgOpportunityDpsA,
+    avgOpportunityDpsB,
+    totalOpportunityShotsA,
+    totalOpportunityShotsB,
+    totalOpportunityHitsA,
+    totalOpportunityHitsB,
+    totalOpportunityDmgA,
+    totalOpportunityDmgB,
     avgWeaponCapA,
     avgWeaponCapB,
+    avgBlackoutPctA,
+    avgBlackoutPctB,
+    avgGForceA,
+    avgGForceB,
+    avgBlackoutMaxGA,
+    avgBlackoutMaxGB,
+    totalReloadsA,
+    totalReloadsB,
+    hasBallisticsA,
+    hasBallisticsB,
+    avgAmmoRemainingA,
+    avgAmmoRemainingB,
+    avgAmmoRemainingPctA,
+    avgAmmoRemainingPctB,
+    totalAmmoRemainingA,
+    totalAmmoRemainingB,
   }
 }
 

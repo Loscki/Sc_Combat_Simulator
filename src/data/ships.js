@@ -26,6 +26,7 @@ import {
   componentLabel,
   componentOptionsForSlot,
 } from './components.js'
+import { buildPilotEfficiencyCurve } from '../lib/pilotMastery.js'
 import { WEAPON_CATALOG, WEAPON_DAMAGE_TO_SIM_SCALE, WEAPON_DPS_TO_SIM_SCALE, calibratedWeaponDps, weaponMount } from './weapons.js'
 
 const BODY_HP_OVERRIDES = {
@@ -34,6 +35,50 @@ const BODY_HP_OVERRIDES = {
   mrai_guardian: 7100,
   mrai_guardian_qi: 7100,
   mrai_guardian_mx: 7100,
+}
+
+const PILOT_MASTERY_OVERRIDES = {
+  anvl_arrow: {
+    pilotDemandScore: 0.72,
+    pilotSkillOffset: -0.02,
+    pilotSkillScale: 1.18,
+    pilotSkillPivot: 7.1,
+    pilotSkillScaleLow: 0.86,
+    pilotSkillScaleHigh: 1.03,
+    pilotSkillExponentLow: 1.45,
+  },
+  aegs_gladius: {
+    pilotDemandScore: 0.38,
+    pilotSkillOffset: 0.18,
+    pilotSkillScale: 0.96,
+    pilotSkillPivot: 5.8,
+    pilotSkillScaleLow: 0.98,
+    pilotSkillScaleHigh: 0.94,
+  },
+  mrai_guardian: {
+    pilotDemandScore: 0.22,
+    pilotSkillOffset: 0.24,
+    pilotSkillScale: 0.90,
+    pilotSkillPivot: 5.6,
+    pilotSkillScaleLow: 0.96,
+    pilotSkillScaleHigh: 0.88,
+  },
+  mrai_guardian_qi: {
+    pilotDemandScore: 0.24,
+    pilotSkillOffset: 0.22,
+    pilotSkillScale: 0.90,
+    pilotSkillPivot: 5.6,
+    pilotSkillScaleLow: 0.96,
+    pilotSkillScaleHigh: 0.88,
+  },
+  mrai_guardian_mx: {
+    pilotDemandScore: 0.22,
+    pilotSkillOffset: 0.24,
+    pilotSkillScale: 0.90,
+    pilotSkillPivot: 5.6,
+    pilotSkillScaleLow: 0.96,
+    pilotSkillScaleHigh: 0.88,
+  },
 }
 
 const BASE_SHIPS = {
@@ -765,21 +810,24 @@ function withWeaponDefaults(ship, selectedLoadoutId = STOCK_LOADOUT_ID, customCo
 
 function buildLoadoutOptions(ship, customConfig = null) {
   const stockWeaponLoadout = Array.isArray(ship.weaponLoadout) ? ship.weaponLoadout : inferWeaponLoadout(ship)
-  const stockSlots = baseWeaponSlotsForShip(ship)
+  const stockLayout = stockWeaponLayoutForShip(ship)
+  const stockSlots = stockLayout.slotWeapons
+  const auxiliaryMounts = stockLayout.auxiliaryMounts
   const stock = {
     id: STOCK_LOADOUT_ID,
     name: 'Loadout base',
     description: 'Configuración base cargada desde los datos de la nave.',
     weaponLoadout: stockWeaponLoadout,
     weapons: stockSlots.length > 0
-      ? describeWeaponSlots(stockSlots)
+      ? [...describeWeaponSlots(stockSlots), ...describeAuxiliaryWeapons(auxiliaryMounts)]
       : describeLoadoutWeapons(stockWeaponLoadout),
   }
 
   const variants = LOADOUT_PRESETS
     .map((preset) => {
-      const weaponLoadout = loadoutFromHardpoints(ship, preset.bySize)
-      if (!coversAllHardpoints(ship, weaponLoadout)) return null
+      const hardpointLoadout = loadoutFromHardpoints(ship, preset.bySize)
+      const weaponLoadout = [...hardpointLoadout, ...auxiliaryMounts]
+      if (!coversAllHardpoints(ship, hardpointLoadout)) return null
       return {
         id: preset.id,
         name: preset.name,
@@ -802,7 +850,7 @@ function buildCustomWeaponLoadout(ship, customConfig) {
   const slots = baseWeaponSlotsForShip(ship)
     .map((slot) => {
       const selectedWeapon = WEAPON_CATALOG[selected[slot.id]]
-      const selectedWeaponId = selectedWeapon && Number(selectedWeapon.size) === Number(slot.size)
+      const selectedWeaponId = selectedWeapon && weaponFitsSlot(selectedWeapon, slot.size)
         ? selectedWeapon.id
         : null
       const weaponId = selectedWeaponId ?? slot.baseWeaponId
@@ -821,44 +869,115 @@ function buildCustomWeaponLoadout(ship, customConfig) {
   const hasChanges = slots.some(slot => slot.weaponId !== slot.baseWeaponId)
   if (!hasChanges) return null
 
-  const weaponLoadout = aggregateWeaponSlots(slots)
+  const auxiliaryMounts = auxiliaryWeaponMountsForShip(ship)
+  const weaponLoadout = [...aggregateWeaponSlots(slots), ...auxiliaryMounts]
 
   return {
     id: CUSTOM_LOADOUT_ID,
     name: 'Personalizado',
     description: 'Armas elegidas manualmente para cada espacio compatible de la nave.',
     weaponLoadout,
-    weapons: describeWeaponSlots(slots),
+    weapons: [...describeWeaponSlots(slots), ...describeAuxiliaryWeapons(auxiliaryMounts)],
   }
 }
 
 function baseWeaponSlotsForShip(ship) {
+  return stockWeaponLayoutForShip(ship).slotWeapons
+}
+
+function auxiliaryWeaponMountsForShip(ship) {
+  return stockWeaponLayoutForShip(ship).auxiliaryMounts
+}
+
+function stockWeaponLayoutForShip(ship) {
   const slots = hardpointSlotsForShip(ship)
   const stockLoadout = Array.isArray(ship.weaponLoadout) ? ship.weaponLoadout : inferWeaponLoadout(ship)
   const stockPool = expandWeaponMounts(stockLoadout)
+  const { assignedSlots, remainingWeapons, upgradedSlotSizes } = assignStockWeaponsToSlots(slots, stockPool)
 
-  return slots
+  const slotWeapons = slots
     .map((slot, index) => {
-      const stockIndex = stockPool.findIndex(mount => Number(WEAPON_CATALOG[mount.weaponId]?.size) === Number(slot.size))
-      const stockMount = stockIndex >= 0 ? stockPool.splice(stockIndex, 1)[0] : null
-      const fallbackWeaponId = weaponOptionsForSize(slot.size)[0]?.id ?? null
-      const baseWeaponId = stockMount?.weaponId ?? fallbackWeaponId
-      const baseWeapon = WEAPON_CATALOG[baseWeaponId]
-
-      if (!baseWeapon) return null
+      const stockMount = assignedSlots.get(slot.id) ?? null
+      const resolvedSize = upgradedSlotSizes.get(slot.id) ?? slot.size
+      const baseWeaponId = stockMount?.weaponId ?? null
+      const baseWeapon = baseWeaponId ? WEAPON_CATALOG[baseWeaponId] : null
 
       return {
         ...slot,
+        size: resolvedSize,
         index: index + 1,
-        label: `Arma ${index + 1} · S${slot.size}`,
+        label: `Arma ${index + 1} · S${resolvedSize}`,
         baseWeaponId,
-        baseWeaponName: baseWeapon.name,
+        baseWeaponName: baseWeapon?.name ?? null,
         baseMount: stockMount?.mount ?? 'fixed',
         weaponId: baseWeaponId,
         mount: stockMount?.mount ?? 'fixed',
       }
     })
-    .filter(Boolean)
+
+  return {
+    slotWeapons,
+    auxiliaryMounts: aggregateWeaponSlots(remainingWeapons),
+  }
+}
+
+function assignStockWeaponsToSlots(slots, stockPool) {
+  const availableSlots = [...slots]
+  const pool = stockPool
+    .map((mount, index) => ({
+      ...mount,
+      key: `${mount.weaponId}-${index}`,
+      weaponSize: weaponSizeForId(mount.weaponId),
+    }))
+    .sort((a, b) => {
+      const sizeDiff = (Number(b.weaponSize) || 0) - (Number(a.weaponSize) || 0)
+      if (sizeDiff !== 0) return sizeDiff
+      return String(a.weaponId).localeCompare(String(b.weaponId))
+    })
+
+  const assignedSlots = new Map()
+  const consumedKeys = new Set()
+  const upgradedSlotSizes = new Map()
+
+  pool.forEach((mount) => {
+    const compatibleSlot = availableSlots
+      .filter(slot => !assignedSlots.has(slot.id) && weaponFitsSlot(mount.weaponId, slot.size))
+      .sort((a, b) => {
+        const sizeDiff = Number(a.size) - Number(b.size)
+        if (sizeDiff !== 0) return sizeDiff
+        return String(a.id).localeCompare(String(b.id))
+      })[0]
+
+    if (!compatibleSlot) return
+    assignedSlots.set(compatibleSlot.id, mount)
+    consumedKeys.add(mount.key)
+  })
+
+  const remainingPool = pool.filter(mount => !consumedKeys.has(mount.key))
+  const unassignedSlots = availableSlots.filter(slot => !assignedSlots.has(slot.id))
+
+  remainingPool.forEach((mount) => {
+    const fallbackSlot = unassignedSlots
+      .filter(slot => !assignedSlots.has(slot.id))
+      .sort((a, b) => {
+        const sizeDiff = Number(a.size) - Number(b.size)
+        if (sizeDiff !== 0) return sizeDiff
+        return String(a.id).localeCompare(String(b.id))
+      })[0]
+
+    if (!fallbackSlot) return
+    assignedSlots.set(fallbackSlot.id, mount)
+    upgradedSlotSizes.set(fallbackSlot.id, Math.max(Number(fallbackSlot.size) || 0, Number(mount.weaponSize) || 0))
+    consumedKeys.add(mount.key)
+  })
+
+  return {
+    assignedSlots,
+    upgradedSlotSizes,
+    remainingWeapons: pool
+      .filter(mount => !consumedKeys.has(mount.key))
+      .map(({ key, weaponSize, ...mount }) => mount),
+  }
 }
 
 function hardpointSlotsForShip(ship) {
@@ -911,6 +1030,18 @@ function aggregateWeaponSlots(slots) {
   return Array.from(grouped.values()).map(({ weaponId, count, mount }) => weaponMount(weaponId, count, mount))
 }
 
+function weaponSizeForId(weaponId) {
+  return Number(WEAPON_CATALOG[weaponId]?.size) || 0
+}
+
+function weaponFitsSlot(weaponOrId, slotSize) {
+  const weaponSize = typeof weaponOrId === 'string'
+    ? weaponSizeForId(weaponOrId)
+    : Number(weaponOrId?.size) || 0
+  const maxSize = Number(slotSize) || 0
+  return weaponSize > 0 && maxSize > 0 && weaponSize <= maxSize
+}
+
 function loadoutFromHardpoints(ship, weaponBySize) {
   return Object.entries(ship.hardpoints ?? {})
     .map(([sizeKey, count]) => {
@@ -938,9 +1069,20 @@ function describeLoadoutWeapons(weaponLoadout) {
 function describeWeaponSlots(slots) {
   return slots.map((slot) => {
     const weapon = WEAPON_CATALOG[slot.weaponId ?? slot.baseWeaponId]
+    if (!weapon) return `${slot.label}: Sin arma cargada`
     const weaponName = weapon?.name ?? slot.weaponId ?? 'Arma'
     const mountLabel = slot.mount === 'turret' ? ' · torreta' : ''
-    return `${slot.label}: ${weaponName}${mountLabel}`
+    const sizeLabel = weapon && Number(weapon.size) !== Number(slot.size) ? ` · arma S${weapon.size}` : ''
+    return `${slot.label}: ${weaponName}${sizeLabel}${mountLabel}`
+  })
+}
+
+function describeAuxiliaryWeapons(mounts) {
+  return mounts.map((mount, index) => {
+    const weapon = WEAPON_CATALOG[mount.weaponId]
+    const count = Math.max(1, Number(mount.count) || 1)
+    if (!weapon) return `Arma de serie ${index + 1}: ${mount.weaponId} ×${count}`
+    return `Arma de serie ${index + 1}: ${weapon.name} ×${count} (S${weapon.size})`
   })
 }
 
@@ -948,7 +1090,7 @@ export function getShipForLoadout(shipId, loadoutId = STOCK_LOADOUT_ID, customCo
   const baseShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(BASE_SHIPS[shipId] ?? BASE_SHIPS.aegs_gladius)))
   const componentShip = withComponentOverrides(baseShip, customConfig)
   const weaponShip = withWeaponDefaults(componentShip, loadoutId, customConfig)
-  const resolvedShip = withCombatMetrics(withSensorDefaults(weaponShip))
+  const resolvedShip = withCombatMetrics(withPilotMasteryProfile(withSensorDefaults(weaponShip)))
 
   return {
     ...resolvedShip,
@@ -1143,7 +1285,7 @@ function buildConfigurationSlots(ship, customConfig) {
     weapons: baseWeaponSlotsForShip(ship)
       .map((slot) => {
         const selectedWeapon = WEAPON_CATALOG[weaponSelections[slot.id]]
-        const selectedId = selectedWeapon && Number(selectedWeapon.size) === Number(slot.size)
+        const selectedId = selectedWeapon && weaponFitsSlot(selectedWeapon, slot.size)
           ? selectedWeapon.id
           : ''
         const loadedWeaponId = selectedId || slot.baseWeaponId
@@ -1154,12 +1296,12 @@ function buildConfigurationSlots(ship, customConfig) {
           selectedId: selectedId && selectedId !== slot.baseWeaponId ? selectedId : '',
           selectedWeaponId: loadedWeaponId,
           selectedWeaponName: loadedWeapon?.name ?? slot.baseWeaponName,
-          baseWeaponLabel: slot.baseWeaponName,
-          options: weaponOptionsForSize(slot.size)
+          baseWeaponLabel: formatWeaponLabelForSlot(slot, loadedWeapon),
+          options: weaponOptionsForSlot(slot.size)
             .filter(option => option.id !== slot.baseWeaponId && option.name !== slot.baseWeaponName),
         }
       })
-      .filter(slot => slot.size > 0 && slot.baseWeaponId),
+      .filter(slot => slot.size > 0),
     components: componentSlotsForShip(ship).map((slot) => {
       const baseComponent = inferredBaseComponentForSlot(ship, slot)
       const options = componentOptionsForSlot(slot.type, slot.size).map(component => ({
@@ -1222,13 +1364,15 @@ function relativeDiff(value, target) {
   return Math.abs(v - t) / Math.abs(t)
 }
 
-function weaponOptionsForSize(size) {
+function weaponOptionsForSlot(size) {
   const seen = new Set()
 
   return Object.values(WEAPON_CATALOG)
     .filter(weapon => weapon.source === 'real')
-    .filter(weapon => Number(weapon.size) === Number(size))
+    .filter(weapon => weaponFitsSlot(weapon, size))
     .sort((a, b) => {
+      const sizeCompare = Number(b.size) - Number(a.size)
+      if (sizeCompare !== 0) return sizeCompare
       const typeCompare = String(a.type ?? '').localeCompare(String(b.type ?? ''))
       if (typeCompare !== 0) return typeCompare
       return String(a.name ?? '').localeCompare(String(b.name ?? ''))
@@ -1242,9 +1386,16 @@ function weaponOptionsForSize(size) {
     .map(weapon => ({
       id: weapon.id,
       name: weapon.name,
-      label: `${weapon.name} · ${weapon.type} · DPS ${Math.round(Number(weapon.burstDps) || 0)}`,
+      label: `${weapon.name} · S${weapon.size} · ${weapon.type} · DPS ${Math.round(Number(weapon.burstDps) || 0)}`,
       detail: `${weapon.type} · ${Math.round(Number(weapon.range) || 0)}m · ${Number(weapon.ammo) > 0 ? `${weapon.ammo} mun.` : 'energía'}`,
     }))
+}
+
+function formatWeaponLabelForSlot(slot, weapon) {
+  if (!weapon?.name) return 'Sin arma cargada'
+  return Number(weapon.size) === Number(slot?.size)
+    ? weapon.name
+    : `${weapon.name} · arma S${weapon.size}`
 }
 
 function componentDetail(component, mounts = 1) {
@@ -1732,6 +1883,66 @@ function withSensorDefaults(ship) {
   return { ...ship, radarStrength, sigEM, sigIR, sigCS, signatureProfile }
 }
 
+function withPilotMasteryProfile(ship) {
+  const derived = derivedPilotMasteryProfile(ship)
+  const override = PILOT_MASTERY_OVERRIDES[ship.id] ?? {}
+
+  return {
+    ...ship,
+    pilotDemandScore: round2(Number.isFinite(Number(override.pilotDemandScore)) ? Number(override.pilotDemandScore) : derived.pilotDemandScore),
+    pilotSkillOffset: round2(Number.isFinite(Number(override.pilotSkillOffset)) ? Number(override.pilotSkillOffset) : derived.pilotSkillOffset),
+    pilotSkillScale: round2(Number.isFinite(Number(override.pilotSkillScale)) ? Number(override.pilotSkillScale) : derived.pilotSkillScale),
+    pilotSkillPivot: round2(Number.isFinite(Number(override.pilotSkillPivot)) ? Number(override.pilotSkillPivot) : derived.pilotSkillPivot),
+    pilotSkillScaleLow: round2(Number.isFinite(Number(override.pilotSkillScaleLow)) ? Number(override.pilotSkillScaleLow) : derived.pilotSkillScaleLow),
+    pilotSkillScaleHigh: round2(Number.isFinite(Number(override.pilotSkillScaleHigh)) ? Number(override.pilotSkillScaleHigh) : derived.pilotSkillScaleHigh),
+    pilotSkillExponentLow: round2(Number.isFinite(Number(override.pilotSkillExponentLow)) ? Number(override.pilotSkillExponentLow) : derived.pilotSkillExponentLow),
+  }
+}
+
+function derivedPilotMasteryProfile(ship) {
+  const evasion = clamp(0, Number(ship.evasion) || 0.25, 1)
+  const thruster = clamp(0, Number(ship.thrusterScore) || evasion, 1)
+  const strafe = clamp(0, Number(ship.strafeThrusterScore) || thruster, 1)
+  const boost = clamp(0, Number(ship.boostThrusterScore) || thruster, 1)
+  const zeroToScm = Number(ship.zeroToScm)
+  const accelerationDemand = Number.isFinite(zeroToScm)
+    ? clamp(0, (4.8 - zeroToScm) / 3.6, 1)
+    : thruster
+  const agilityDemand = clamp(0, evasion * 0.20 + thruster * 0.30 + strafe * 0.22 + boost * 0.18 + accelerationDemand * 0.10, 1)
+
+  const bodyHp = Number(ship.vitalHullMax) || 0
+  const fragilityDemand = bodyHp > 0
+    ? clamp(0, (3200 - bodyHp) / 1800, 1)
+    : clamp(0, (2400 - (Number(ship.hullMax) || 0)) / 1400, 1)
+
+  const roleText = `${ship.role || ''} ${ship.name || ''}`
+  const roleDemandBonus = /interceptor|racer|snub/i.test(roleText)
+    ? 0.08
+    : /heavy fighter|gunship|bomber/i.test(roleText)
+      ? -0.08
+      : /fighter/i.test(roleText)
+        ? -0.03
+        : 0
+
+  const pilotDemandScore = clamp(0.12, agilityDemand * 0.62 + fragilityDemand * 0.18 + roleDemandBonus, 0.82)
+  const pilotSkillOffset = clamp(-0.45, (0.44 - pilotDemandScore) * 1.35, 0.28)
+  const pilotSkillScale = clamp(0.88, 0.92 + pilotDemandScore * 0.28, 1.16)
+  const pilotSkillPivot = clamp(5.5, 5.45 + pilotDemandScore * 1.55, 7.1)
+  const pilotSkillScaleLow = clamp(0.78, pilotSkillScale * (0.86 - pilotDemandScore * 0.10), 1.02)
+  const pilotSkillScaleHigh = clamp(0.92, pilotSkillScale * (1.04 + pilotDemandScore * 0.08), 1.28)
+  const pilotSkillExponentLow = clamp(1.18, 1.18 + pilotDemandScore * 0.42, 1.55)
+
+  return {
+    pilotDemandScore,
+    pilotSkillOffset,
+    pilotSkillScale,
+    pilotSkillPivot,
+    pilotSkillScaleLow,
+    pilotSkillScaleHigh,
+    pilotSkillExponentLow,
+  }
+}
+
 function withCombatMetrics(ship) {
   const weaponry = weaponryMetricsForShip(ship)
   const armor = armorMetricsForShip(ship)
@@ -1754,6 +1965,13 @@ function withCombatMetrics(ship) {
       armor,
       flight,
       computed,
+      mastery: {
+        demandPct: Math.round((Number(ship.pilotDemandScore) || 0) * 100),
+        skillOffset: round2(Number(ship.pilotSkillOffset) || 0),
+        skillScale: round2(Number(ship.pilotSkillScale) || 1),
+        pivotSkill: round2(Number(ship.pilotSkillPivot) || 0),
+        efficiencyCurve: buildPilotEfficiencyCurve(ship, 0.1, computed.maneuverabilityPct),
+      },
     },
   }
 }
@@ -2003,7 +2221,7 @@ function formatCompactNumber(value) {
 export const SHIPS = Object.fromEntries(
   Object.entries(BASE_SHIPS).map(([id, ship]) => {
     const realShip = withPowerPlantDefaults(withArmorDefaults(withRealVehicleDefaults(ship)))
-    return [id, withCombatMetrics(withSensorDefaults(withWeaponDefaults(realShip)))]
+    return [id, withCombatMetrics(withPilotMasteryProfile(withSensorDefaults(withWeaponDefaults(realShip))))]
   })
 )
 

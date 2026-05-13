@@ -3,14 +3,19 @@
  * Ficha de combate centrada en datos reales de nave y metricas calculadas.
  */
 
+import { useEffect, useState } from 'react'
+import { CartesianGrid, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+
 export function ShipCard({
   ship,
   shipId,
+  pilotSkill,
   ships,
   side,
   onSelectShip,
   onSelectWeapon,
   onSelectComponent,
+  onPilotSkillChange,
 }) {
   const isA = side === 'a'
   const color = isA ? '#378ADD' : '#D85A30'
@@ -19,13 +24,24 @@ export function ShipCard({
   const shipSource = ship.combatMetrics?.displaySource ?? ship.shipDataSource ?? 'mock'
   const weaponSlots = ship.configurationSlots?.weapons ?? []
   const componentSlots = ship.configurationSlots?.components ?? []
+  const fixedSystemLines = buildFixedSystemLines(ship.realVehicle?.components)
+  const fixedWeaponLines = Array.isArray(ship.currentLoadout?.weapons)
+    ? ship.currentLoadout.weapons.filter((line) => String(line).startsWith('Arma de serie'))
+    : []
+  const fixedWeaponCount = fixedWeaponLines.reduce((sum, line) => {
+    const match = String(line).match(/×(\d+)/)
+    return sum + (match ? Number(match[1]) || 0 : 1)
+  }, 0)
   const metrics = ship.combatMetrics ?? {}
   const hull = metrics.hull ?? {}
   const weaponry = metrics.weaponry ?? {}
   const armor = metrics.armor ?? {}
   const flight = metrics.flight ?? {}
   const computed = metrics.computed ?? {}
+  const mastery = metrics.mastery ?? {}
   const accelerations = flight.accelerations ?? {}
+  const efficiencyCurve = Array.isArray(mastery.efficiencyCurve) ? mastery.efficiencyCurve : []
+  const currentCurvePoint = closestCurvePoint(efficiencyCurve, pilotSkill)
 
   const shipList = Object.values(ships).sort((s1, s2) => {
     const m = s1.manufacturer.localeCompare(s2.manufacturer)
@@ -46,17 +62,19 @@ export function ShipCard({
         <i className="ti ti-rocket" style={{ color }} aria-hidden="true" />
         <div className="ship-header-text">
           <span className="ship-name">{ship.name}</span>
-          <span className="ship-meta">{ship.role} · {weaponBank.weaponCount ?? 0} armas</span>
+          <span className="ship-meta">{formatShipWeaponMeta(ship.role, weaponBank.weaponCount, weaponSlots.length, fixedWeaponCount)}</span>
         </div>
-        <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{isA ? 'Alfa' : 'Beta'}</span>
+        <span className={`tag tag-${isA ? 'blue' : 'coral'}`}>{ship.name}</span>
       </div>
 
-      <div className="ship-select-row" aria-label={`Selector de nave ${isA ? 'Alfa' : 'Beta'}`}>
+      <ShipHeroImage ship={ship} color={color} />
+
+      <div className="ship-select-row" aria-label={`Selector de nave ${ship.name}`}>
         <select
           className="ship-select"
           value={shipId}
           onChange={(e) => onSelectShip(e.target.value)}
-          aria-label={`Elegir nave para bando ${isA ? 'Alfa' : 'Beta'}`}
+          aria-label={`Elegir nave para ${ship.name}`}
         >
           {Object.entries(grouped).map(([manufacturer, list]) => (
             <optgroup key={manufacturer} label={manufacturer}>
@@ -71,12 +89,13 @@ export function ShipCard({
       </div>
 
       {(weaponSlots.length > 0 || componentSlots.length > 0) && (
-        <div className="loadout-configurator" aria-label={`Configurador de nave ${isA ? 'Alfa' : 'Beta'}`}>
+        <div className="loadout-configurator" aria-label={`Configurador de nave ${ship.name}`}>
           {weaponSlots.length > 0 && (
             <div className="config-group">
               <div className="config-group-title">
                 <i className="ti ti-target" aria-hidden="true" />
                 <span>Armas compatibles</span>
+                <span className="config-editable-badge">Editable</span>
               </div>
               {weaponSlots.map((slot) => (
                 <LoadoutSelect
@@ -92,11 +111,32 @@ export function ShipCard({
             </div>
           )}
 
+          {fixedWeaponLines.length > 0 && (
+            <div className="config-group config-group-fixed">
+              <div className="config-group-title">
+                <i className="ti ti-lock" aria-hidden="true" />
+                <span>Armas de serie</span>
+                <span className="config-fixed-badge">No configurable</span>
+              </div>
+              <div className="config-fixed-list" aria-label={`Armas de serie de ${ship.name}`}>
+                {fixedWeaponLines.map((line) => (
+                  <div key={line} className="config-fixed-item">
+                    <span className="config-fixed-item-icon">
+                      <i className="ti ti-lock" aria-hidden="true" />
+                    </span>
+                    <span className="config-fixed-item-text">{formatFixedWeaponLine(line)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {componentSlots.length > 0 && (
             <div className="config-group">
               <div className="config-group-title">
                 <i className="ti ti-adjustments" aria-hidden="true" />
                 <span>Componentes compatibles</span>
+                <span className="config-editable-badge">Editable</span>
               </div>
               {componentSlots.map((slot) => (
                 <LoadoutSelect
@@ -111,7 +151,40 @@ export function ShipCard({
               ))}
             </div>
           )}
+
+          {fixedSystemLines.length > 0 && (
+            <div className="config-group config-group-fixed">
+              <div className="config-group-title">
+                <i className="ti ti-package" aria-hidden="true" />
+                <span>Sistemas de serie</span>
+                <span className="config-fixed-badge">No configurable</span>
+              </div>
+              <div className="config-fixed-list" aria-label={`Sistemas de serie de ${ship.name}`}>
+                {fixedSystemLines.map((line) => (
+                  <div key={line} className="config-fixed-item">
+                    <span className="config-fixed-item-icon">
+                      <i className="ti ti-package" aria-hidden="true" />
+                    </span>
+                    <span className="config-fixed-item-text">{line}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {efficiencyCurve.length > 0 && (
+        <PilotEfficiencyPanel
+          color={color}
+          curve={efficiencyCurve}
+          currentSkill={pilotSkill}
+          currentPoint={currentCurvePoint}
+          mastery={mastery}
+          side={side}
+          onPilotSkillChange={onPilotSkillChange}
+          shipName={ship.name}
+        />
       )}
 
       <div className="combat-sources">
@@ -230,15 +303,135 @@ export function ShipCard({
   )
 }
 
+function ShipHeroImage({ ship, color }) {
+  const src = shipPhotoUrl(ship)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [src])
+
+  return (
+    <div className="ship-photo-frame">
+      {!failed && src ? (
+        <img
+          className="ship-photo"
+          src={src}
+          alt={ship?.name ? `Vista de ${ship.name}` : 'Vista de la nave'}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="ship-photo-fallback" aria-hidden="true">
+          <i className="ti ti-rocket" style={{ color }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PilotEfficiencyPanel({ color, curve, currentSkill, currentPoint, mastery, side, onPilotSkillChange, shipName }) {
+  const pivot = Number(mastery?.pivotSkill)
+  const demandPct = Number(mastery?.demandPct)
+  const chartMax = efficiencyChartMax(curve)
+  const yTicks = efficiencyChartTicks(chartMax)
+
+  return (
+    <section className="ship-mastery-panel" aria-label="Curva de eficiencia por habilidad">
+      <div className="ship-spec-title-row">
+        <div>
+          <h3 className="ship-spec-title">Curva por habilidad</h3>
+          <p className="ship-mastery-copy">
+            Cuanto partido puedes sacarle a esta nave segun tu nivel de pilotaje.
+          </p>
+        </div>
+        <div className="ship-mastery-badges">
+          {Number.isFinite(demandPct) ? <span className="ship-mastery-badge">Exigencia {demandPct}%</span> : null}
+          {Number.isFinite(pivot) ? <span className="ship-mastery-badge">Despega en {formatSkill(pivot)}</span> : null}
+        </div>
+      </div>
+
+      <div className="ship-mastery-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={curve} margin={{ top: 10, right: 8, bottom: 0, left: 4 }}>
+            <CartesianGrid stroke="var(--border-light)" strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="skill"
+              type="number"
+              domain={[0, 10]}
+              ticks={[0, 2, 4, 6, 8, 10]}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
+            />
+            <YAxis
+              domain={[0, chartMax]}
+              ticks={yTicks}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
+              width={42}
+            />
+            <Tooltip content={<PilotEfficiencyTooltip />} />
+            <Line
+              type="monotone"
+              dataKey="efficiencyPct"
+              stroke={color}
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={{ r: 5, fill: color, stroke: 'var(--bg-primary)', strokeWidth: 2 }}
+            />
+            {currentPoint ? (
+              <ReferenceDot
+                x={Number(currentSkill)}
+                y={Number(currentPoint.efficiencyPct)}
+                r={5}
+                fill={color}
+                stroke="var(--bg-primary)"
+                strokeWidth={2}
+              />
+            ) : null}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="ship-mastery-summary">
+        <span>Skill actual {formatSkill(currentSkill)}</span>
+        <span>{currentPoint ? `${currentPoint.efficiencyPct}% de partido` : '—'}</span>
+        <span>{currentPoint ? `Skill efectiva ${formatSkill(currentPoint.adjustedSkill)}` : '—'}</span>
+      </div>
+
+      <div className="ship-mastery-skill-control">
+        <div className="section-label">Nivel del piloto</div>
+        <div className="slider-row pilot-skill-row ship-card-skill-row">
+          <span className={`pilot-skill-label tag tag-${side === 'a' ? 'blue' : 'coral'}`}>{shipName}</span>
+          <input
+            type="range"
+            min={0}
+            max={10}
+            step={0.1}
+            value={currentSkill}
+            onChange={(e) => onPilotSkillChange?.(Number(e.target.value))}
+            aria-label={`Habilidad del piloto ${shipName}`}
+          />
+          <span className="slider-val">{formatSkill(currentSkill)}</span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function SpecSection({ title, subtitle, children }) {
   return (
-    <section className="ship-spec-section">
-      <div className="ship-spec-title-row">
-        <h3 className="ship-spec-title">{title}</h3>
-        {subtitle ? <span className="ship-spec-subtitle">{subtitle}</span> : null}
-      </div>
+    <details className="ship-spec-section">
+      <summary className="ship-spec-summary">
+        <div className="ship-spec-title-row">
+          <h3 className="ship-spec-title">{title}</h3>
+          {subtitle ? <span className="ship-spec-subtitle">{subtitle}</span> : null}
+        </div>
+      </summary>
       <div className="ship-spec-list">{children}</div>
-    </section>
+    </details>
   )
 }
 
@@ -272,6 +465,20 @@ function ValueTooltip({ value, tooltipTitle, tooltipLines }) {
   )
 }
 
+function PilotEfficiencyTooltip({ active, payload, label }) {
+  if (!active || !Array.isArray(payload) || payload.length === 0) return null
+  const point = payload[0]?.payload
+  if (!point) return null
+
+  return (
+    <div className="ship-chart-tooltip">
+      <div className="ship-chart-tooltip-title">Skill {formatSkill(label)}</div>
+      <div className="ship-chart-tooltip-line">Partido potencial: {formatNumber(point.efficiencyPct)}%</div>
+      <div className="ship-chart-tooltip-line">Skill efectiva: {formatSkill(point.adjustedSkill)}</div>
+    </div>
+  )
+}
+
 function LoadoutSelect({ id, label, value, baseLabel, options, onChange }) {
   return (
     <label className="config-select-row" htmlFor={id}>
@@ -298,6 +505,75 @@ function sourceLabel(source) {
   if (source === 'mixed') return 'real + estimado'
   if (source === 'estimated') return 'estimado'
   return 'fallback mock'
+}
+
+function formatShipWeaponMeta(role, totalWeaponCount, configurableCount, fixedCount) {
+  const total = Math.max(0, Number(totalWeaponCount) || 0)
+  const configurable = Math.max(0, Number(configurableCount) || 0)
+  const fixed = Math.max(0, Number(fixedCount) || 0)
+
+  if (fixed > 0 || configurable > total) {
+    const parts = []
+    if (configurable > 0) parts.push(`${configurable} configurables`)
+    if (fixed > 0) parts.push(`${fixed} de serie`)
+    return `${role} · ${total} armas cargadas${parts.length > 0 ? ` (${parts.join(' + ')})` : ''}`
+  }
+
+  return `${role} · ${total} armas`
+}
+
+function formatFixedWeaponLine(line) {
+  return String(line).replace(/^Arma de serie \d+:\s*/i, '')
+}
+
+function buildFixedSystemLines(components) {
+  if (!Array.isArray(components)) return []
+
+  return components
+    .filter((component) => {
+      const type = String(component?.type ?? '')
+      return type && type !== 'weapons' && !['shield_generators', 'power_plants', 'coolers', 'radar'].includes(type)
+    })
+    .map((component) => {
+      const mounts = Math.max(1, Number(component.mounts) || Number(component.quantity) || 1)
+      const size = String(component.componentSize ?? component.size ?? '').toUpperCase()
+      const sizeLabel = size ? `S${size}` : ''
+      const mountsLabel = mounts > 1 ? ` · ${mounts}x` : ''
+      return `${component.name}${sizeLabel ? ` ${sizeLabel}` : ''}${mountsLabel}`
+    })
+}
+
+const SHIP_IMAGE_FILE_OVERRIDES = {
+  aegs_gladius: 'Gladius in space - Isometric.jpg',
+  anvl_arrow: 'Arrow in space - Isometric.jpg',
+  mrai_guardian: 'Guardian in space - Front.jpg',
+  mrai_guardian_qi: 'Guardian QI in space - Front.jpg',
+  mrai_guardian_mx: 'Guardian MX in space - Isometric.jpg',
+  aegs_avenger_titan: 'Avenger Titan in space - Isometric.jpg',
+  aegs_avenger_stalker: 'Avenger Stalker in space - Isometric.jpg',
+  anvl_hornet_f7c: 'F7C Hornet Mk I in space - Isometric.jpg',
+  anvl_hornet_f7cm: 'F7C-M Super Hornet in space - Isometric.jpg',
+  anvl_hornet_f7cs: 'F7C-S Hornet Ghost in space - Isometric.jpg',
+  anvl_hornet_f7cr: 'F7C-R Hornet Tracker in space - Isometric.jpg',
+}
+
+function shipPhotoUrl(ship) {
+  const explicit = SHIP_IMAGE_FILE_OVERRIDES[ship?.id]
+  if (explicit) return mediaWikiRedirectFileUrl(explicit)
+
+  const rawName = String(ship?.name || '').trim()
+  if (!rawName) return null
+
+  const normalizedName = rawName
+    .replace(/\s+/g, ' ')
+    .replace(/[/:]/g, ' ')
+    .trim()
+
+  return mediaWikiRedirectFileUrl(`${normalizedName} in space - Isometric.jpg`)
+}
+
+function mediaWikiRedirectFileUrl(fileName) {
+  return `https://starcitizen.tools/Special:Redirect/file/${encodeURIComponent(fileName)}`
 }
 
 function joinParts(parts, separator = ' · ') {
@@ -352,4 +628,37 @@ function formatAngle(value) {
 function formatAcceleration(entry) {
   if (!entry || entry.base === null || entry.base === undefined) return '—'
   return `${formatNumber(entry.base)} (${formatNumber(entry.boosted)}) G`
+}
+
+function formatSkill(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return n.toLocaleString('es-ES', { maximumFractionDigits: 1 })
+}
+
+function closestCurvePoint(curve, skill) {
+  if (!Array.isArray(curve) || curve.length === 0) return null
+  const target = Number(skill)
+  if (!Number.isFinite(target)) return null
+
+  return curve.reduce((best, point) => {
+    if (!best) return point
+    return Math.abs(Number(point.skill) - target) < Math.abs(Number(best.skill) - target) ? point : best
+  }, null)
+}
+
+function efficiencyChartMax(curve) {
+  const maxValue = Array.isArray(curve)
+    ? curve.reduce((max, point) => Math.max(max, Number(point?.efficiencyPct) || 0), 0)
+    : 100
+
+  return Math.max(100, Math.ceil(maxValue / 10) * 10)
+}
+
+function efficiencyChartTicks(max) {
+  const ticks = [0, 25, 50, 75, 100]
+  for (let value = 125; value <= max; value += 25) {
+    ticks.push(value)
+  }
+  return ticks.filter((value) => value <= max)
 }

@@ -59,6 +59,197 @@ No borrar entradas antiguas: este archivo es memoria historica del proyecto.
 
 ## Historial
 
+### 2026-05-12 - Curva de eficiencia por habilidad en la ficha de nave
+
+Objetivo:
+Mostrar visualmente como escala cada nave con la habilidad del piloto, para
+entender de un vistazo que naves son faciles de exprimir y cuales requieren
+mas manos, como la Arrow.
+
+Archivos tocados:
+- `src/lib/pilotMastery.js`
+- `src/engine/combatEngine.js`
+- `src/data/ships.js`
+- `src/components/ShipCard.jsx`
+- `src/App.jsx`
+- `src/index.css`
+
+Decision:
+Se extrae la curva de maestria del piloto a una utilidad compartida para no
+duplicar la logica entre motor y UI.
+
+La ficha de cada nave muestra ahora, justo debajo del configurador de
+componentes, una grafica compacta con:
+- eficiencia relativa por skill `0-10`;
+- skill actual resaltada;
+- skill efectiva correspondiente;
+- dificultad de explotacion y skill de despegue.
+
+La metrica pintada en la curva es "porcentaje del potencial de la nave que ese
+piloto esta desbloqueando", normalizado contra el rendimiento de esa misma
+nave a `skill 10`.
+
+Verificacion:
+- la ficha de Alfa y Beta muestra la nueva grafica sin romper el layout;
+- la Arrow presenta una subida mas tardia que la Gladius;
+- `npm run build` correcto.
+
+Refinamiento posterior:
+- el primer diseno de la curva servia para leer aprovechamiento interno de
+  cada nave, pero no ayudaba bien al usuario a responder "con mi nivel, a que
+  nave le sacare mas partido";
+- se redefine la lectura como `partido potencial`, premiando mas el techo que
+  una nave exigente y maniobrable puede desbloquear en skills altas;
+- ademas se corrige el margen izquierdo del eje para que las etiquetas del
+  grafico no aparezcan cortadas.
+- el slider de habilidad de cada piloto se mueve desde el panel central a la
+  propia ficha de nave, justo debajo de su curva, para que lectura y ajuste
+  queden en el mismo sitio.
+- los sliders pasan a trabajar con decimas (`0.1`) y la curva se densifica
+  tambien a decimas, para que el usuario pueda identificarse mejor con niveles
+  como `6.5` u `8.1` y comparar progresiones con mas finura.
+- se corrige un bug donde la curva seguia generandose internamente a pasos de
+  `1` aunque el slider ya usaba decimas; eso hacia que valores como `7.5`
+  heredasen el punto vecino y diesen lecturas engañosas.
+- se reajusta ligeramente el bonus de desbloqueo de naves exigentes para que
+  la Arrow ya supere a la Gladius alrededor de `7.5`, manteniendo a la
+  Gladius por delante en skills medias.
+- se suaviza despues la progresion alta de la Arrow con una curva de
+  desbloqueo menos lineal, para que entre `7.5` y `8.0` gane valor de forma
+  mas gradual en vez de dispararse demasiado rapido.
+- el techo de la curva deja de estar capado en `100`: ese valor pasa a leerse
+  como referencia de eficiencia plena, pero naves con mas techo y peor
+  accesibilidad, como la Arrow, pueden superar ese nivel en manos muy buenas.
+- el eje Y del grafico se vuelve dinamico para mostrar correctamente valores
+  por encima de `100`.
+- las secciones de atributos de la ficha (`Casco`, `Armamento`, `Blindaje`,
+  `Vuelo`, `Aceleraciones`, `Calculo`) pasan a mostrarse como desplegables
+  cerrados por defecto para reducir altura y ruido visual.
+- la zona de graficas del resultado pasa a formato ancho, una grafica por fila,
+  para aprovechar todo el espacio horizontal disponible y mejorar la lectura.
+- los tooltips de graficas se simplifican y pasan al mismo estilo compacto que
+  la curva de habilidad, evitando que tapen tanto el punto inspeccionado.
+- se ordena el espaciado principal de la UI con una escala consistente de
+  `2 / 4 / 8 / 16 / 32`, sustituyendo paddings y gaps intermedios para dar
+  mas ritmo visual y coherencia entre paneles.
+
+### 2026-05-12 - La Arrow empieza a despegar a partir de skill 7
+
+Objetivo:
+Suavizar la progresion de dominio de la Arrow para que no empiece a rendir
+como una nave claramente superior ya en `6 vs 5`. La intencion es que el
+piloto empiece a sacarle verdadero partido a partir de `skill 7`.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/engine/combatEngine.js`
+
+Decision:
+Se recalibra solo la curva de maestria de la Arrow:
+- mayor penalizacion base en skill media;
+- tramo `5 -> 7` mas perezoso;
+- escalado alto conservado para que el techo siga siendo muy fuerte.
+
+Tecnica aplicada:
+- nuevos overrides de Arrow para `pilotSkillOffset`, `pilotSkillPivot`,
+  `pilotSkillScaleLow` y `pilotSkillScaleHigh`;
+- se anade `pilotSkillExponentLow` para poder retrasar el crecimiento por
+  debajo del pivote sin aplastar el escalado de skills altas.
+
+Verificacion:
+- Arrow vs Gladius, 3 min, seed `42`:
+  - `5 vs 5`: gana Gladius;
+  - `6 vs 5`: ya no gana Arrow, queda en zona de empate/transicion;
+  - `7 vs 5`: Arrow ya empieza a sacar ventaja real;
+  - `8 vs 5`: Arrow mantiene un escalado alto y resuelve el duelo.
+- Arrow vs Guardian, 3 min, seed `42`:
+  - `7 vs 5`: aun no garantiza victoria, pero mejora su presion sin romper
+    la ventaja estructural de la Guardian.
+- `npm run build` correcto.
+
+### 2026-05-12 - Panel de resultados centrado en métricas de combate
+
+Objetivo:
+Reducir ruido en la lectura de cada simulación y dejar el panel centrado en
+los datos que de verdad explican el combate: estado final de `Body` y `Hull`,
+roturas de escudo, oportunidad de tiro, disparos/impactos, daño y una medida
+resumida de letalidad.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+
+Decision:
+Se simplifica la UI de resultados y se eliminan del panel datos repetidos o
+más propios de configuración de nave que de lectura del combate.
+
+El motor añade ahora métricas nuevas por nave:
+- `shieldBreaks`: cuántas veces el escudo rival cayó a `0`;
+- `opportunityTimeSec` / `opportunityUptimePct`: tiempo real con ventana de tiro;
+- `avgDamagePerShot` / `avgDamagePerHit`: daño medio para lectura rápida.
+
+Con esos datos, el panel por nave pasa a mostrar:
+- distancia de detección;
+- `Body` restante;
+- `Hull` restante;
+- veces que el escudo llegó a `0`;
+- ventana de oportunidad;
+- disparos / impactos;
+- daño medio;
+- daño total;
+- `Letalidad`.
+
+La `Letalidad` se presenta como un índice sintético 0-100, con mayor peso en
+el progreso de destrucción del `Body` rival.
+
+Verificacion:
+- Gladius vs Arrow, 3 min, seed `42`:
+  - ambas naves muestran ahora `Body`, `Hull`, `Escudo a 0`, `Ventana de oportunidad`,
+    `Disparos / impactos`, `Daño medio`, `Daño total` y `Letalidad`;
+  - el motor devuelve correctamente las nuevas métricas:
+    - ejemplo Alfa: `shieldBreaks = 1`, `opportunityUptimePct = 99`,
+      `avgDamagePerHit = 6.8`.
+- `npm run build` vuelve a pasar correctamente.
+
+Correccion posterior:
+- La primera definicion de `Ventana de oportunidad` resulto demasiado amplia:
+  estaba demasiado cerca de "tiempo en rango" y arrojaba valores irreales como
+  `99%` para ambos bandos en Gladius vs Arrow a skill `5 vs 5`.
+- Se redefine para medir solo el tiempo en que la nave puede convertir la
+  ventana en daño útil, usando una combinacion de `fireControl` y probabilidad
+  efectiva final de impacto por arma/objetivo.
+- Ademas, el contador de escudo en UI deja de representar "escudos rotos al
+  rival" y pasa a representar cuantas veces el escudo de esa nave cayó a `0`.
+
+Verificacion ajustada:
+- Gladius vs Arrow, 3 min, seed `42`:
+  - Gladius: `22%` de ventana de oportunidad;
+  - Arrow: `71%` de ventana de oportunidad;
+  - ambas con `1` caida de escudo a `0`.
+
+Refinamiento posterior 2:
+- Se introduce una capa de `mastery` / exigencia de pilotaje por nave.
+- Objetivo: separar "nave capaz" de "nave facil de exprimir".
+- Efecto buscado:
+  - la Gladius ofrece mejor rendimiento a igualdad de skill media;
+  - la Arrow penaliza mas al piloto medio, pero escala mas cuando el piloto es
+    claramente superior.
+
+Implementacion:
+- `src/data/ships.js` añade:
+  - perfil derivado `pilotDemandScore`, `pilotSkillOffset`, `pilotSkillScale`;
+  - overrides calibrados para Arrow, Gladius y Guardian.
+- `src/engine/combatEngine.js` usa una `shipAdjustedPilotSkill()` para la parte
+  puramente de combate, manteniendo la skill bruta para sensores/reaccion.
+
+Verificacion ajustada 2:
+- Arrow vs Gladius, `5 vs 5`, seed `42`:
+  - gana Gladius por estado final;
+- Arrow vs Gladius, `8 vs 5`:
+  - Arrow destruye en `136.8s`;
+- Arrow vs Guardian, `8 vs 5`:
+  - Arrow destruye en `162.2s`.
+
 ### 2026-05-12 - La habilidad del piloto pesa mas contra blancos grandes
 
 Objetivo:
@@ -552,6 +743,355 @@ Impacto en simulacion:
 
 Verificacion:
 - `npm run build` correcto.
+
+### 2026-05-13 - Revision del merge y dominio de nave en ventana de disparo
+
+Objetivo:
+Hacer mas realista la ventana de oportunidad durante el merge y evitar que una
+nave exigente como la Arrow obtenga demasiada ventana con un piloto medio.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/App.jsx`
+
+Decision:
+- El merge deja de aplicar una penalizacion automatica al tracking. Ahora se
+  trata como un lance frontal con bonus de oportunidad.
+- La ventaja del merge depende de giro util, roll, strafe, boost y dominio real
+  de la nave por parte del piloto.
+- El tracking y la presion defensiva pasan por un factor de `control util`, que
+  reduce cuanto puede aprovechar un piloto una nave exigente antes de dominarla.
+- La explicacion del popup se actualiza para reflejar que la Arrow tiene mucho
+  techo, pero no convierte su agilidad en ventana real con pilotos medios.
+
+Verificacion:
+- Arrow vs Gladius, skill 5 vs 5, seed 42: gana Gladius; ventana Arrow 30%,
+  ventana Gladius 31%, acierto 34% / 34%.
+- En 160 simulaciones skill 5 vs 5: Arrow 0 victorias, Gladius 144 victorias,
+  16 empates; ventana media 30% / 31%.
+
+### 2026-05-13 - Modelo inicial de blackout por G sostenidas
+
+Objetivo:
+Simular que el piloto no puede forzar giros maximos de forma indefinida. Una
+carga de G positiva sostenida por encima del umbral del piloto debe reducir su
+capacidad de mantener tracking.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+- `src/components/MultiSummaryPanel.jsx`
+- `src/hooks/useSimulator.js`
+- `src/App.jsx`
+
+Decision:
+- El blackout solo aplica en combate dinamico, no en modo `static`.
+- Despues del merge, el motor estima la G positiva al cerrar giro usando las
+  aceleraciones verticales de la nave o un fallback por thrusters.
+- Si la G sostenida supera el umbral del piloto durante varios segundos, se
+  acumula carga de blackout.
+- El umbral escala con habilidad: pilotos medios entran antes en penalizacion;
+  pilotos expertos dosifican mejor y toleran mas.
+- La penalizacion reduce la calidad de tracking, no bloquea el disparo de forma
+  binaria.
+- La UI muestra porcentaje de combate penalizado y pico estimado de G por nave;
+  en multiples simulaciones muestra blackout medio y pico G medio.
+
+### 2026-05-13 - Grafica comparativa de fuerzas G
+
+Objetivo:
+Poder auditar visualmente en que momentos del combate cada piloto sufre mayor
+carga G y relacionarlo con merge, ventana de disparo y blackout.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/Charts.jsx`
+
+Decision:
+- El motor guarda `aGForce` y `bGForce` en la serie temporal del resultado.
+- La grafica `Fuerzas G estimadas` compara ambas naves segundo a segundo.
+- Se anade una linea de referencia en 7 G como zona de riesgo inicial.
+
+Verificacion:
+- Simulacion Arrow vs Gladius skill 5: la serie devuelve 181 puntos y picos
+  aproximados de 8.3 G para Arrow y 4.7 G para Gladius.
+- `npm run build` correcto.
+
+### 2026-05-13 - G sostenida dinamica por control humano
+
+Objetivo:
+Corregir que, tras el merge, la grafica de G quedara plana en el pico maximo.
+Eso representaba la demanda de giro de la nave, no la fuerza G realmente
+sostenida por un piloto humano.
+
+Archivo tocado:
+- `src/engine/combatEngine.js`
+
+Decision:
+- Se separa la G potencial de la nave de la G que el piloto consigue sostener.
+- El piloto ahora corrige la entrada de giro con inercia, sobretiros y alivios.
+- Pilotos medios/novatos tienen mas variacion y peor dosificacion cerca del
+  limite.
+- Pilotos expertos mantienen una curva mas estable y tienden a dosificar mejor
+  antes de entrar en blackout.
+
+Verificacion:
+- Arrow vs Gladius skill 5: tras el merge la Arrow oscila aproximadamente entre
+  7.6 y 8.3 G en lugar de quedarse plana.
+- En skill 8 la curva mantiene menor variacion media.
+- `npm run build` correcto.
+
+### 2026-05-13 - Aprovechamiento de ventana de oportunidad
+
+Objetivo:
+Diferenciar entre tener una ventana de oportunidad y sacar provecho real de esa
+ventana. La metrica debe mostrar que ocurrio durante el tiempo total en ventana.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+- `src/components/MultiSummaryPanel.jsx`
+- `src/hooks/useSimulator.js`
+
+Decision:
+- El motor acumula, solo durante ventanas de oportunidad:
+  - tiempo de fuego dentro de ventana;
+  - disparos;
+  - impactos;
+  - dano;
+  - dano por segundo en ventana.
+- La UI muestra `Aprovechamiento de ventana` por combate.
+- El resumen multiple muestra `Aprovechamiento medio` por nave.
+
+Verificacion:
+- Simulacion Gladius vs Arrow skill 5 devuelve valores diferenciados para
+  oportunidad total, disparos/impactos dentro de ventana y dano en ventana.
+- `npm run build` correcto.
+
+### 2026-05-13 - Correccion del aprovechamiento de ventana
+
+Objetivo:
+Evitar que el aprovechamiento aparezca alto cuando el piloto dispara dentro de
+la ventana pero no impacta ni produce dano.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+- `src/components/MultiSummaryPanel.jsx`
+- `src/hooks/useSimulator.js`
+
+Decision:
+- `Aprovechamiento de ventana` deja de medir porcentaje de tiempo disparando.
+- Ahora mide conversion de dano: dano real en ventana frente al dano teorico
+  posible durante esa ventana.
+- El porcentaje de tiempo disparando se conserva como dato secundario `fuego X%`.
+
+Impacto:
+- Si una nave tiene 0.4s de ventana, dispara 9 veces, no impacta y hace 0 dano,
+  el aprovechamiento pasa a ser 0%.
+
+Verificacion:
+- Gladius vs Arrow skill 5 devuelve conversiones de ventana coherentes con dano
+  real producido.
+- `npm run build` correcto.
+
+### 2026-05-13 - Aprovechamiento de ventana en datos brutos
+
+Objetivo:
+Evitar que el porcentaje de aprovechamiento induzca a comparar mal naves con
+potencial, DPS y ventanas diferentes.
+
+Archivos tocados:
+- `src/components/ResultsPanel.jsx`
+- `src/components/MultiSummaryPanel.jsx`
+- `src/hooks/useSimulator.js`
+
+Decision:
+- La fila `Aprovechamiento de ventana` deja de mostrar un porcentaje principal.
+- Ahora muestra datos brutos:
+  - dano por segundo dentro de ventana;
+  - tiempo disparando;
+  - disparos / impactos;
+  - dano total dentro de ventana.
+- El resumen multiple usa el mismo criterio con medias/totales agregados.
+
+Verificacion:
+- Gladius vs Arrow skill 5 muestra segundos disparando, disparos/impactos,
+  dano total y dano/s sin porcentaje principal.
+- `npm run build` correcto.
+
+### 2026-05-13 - Dano total como dato principal de ventana
+
+Objetivo:
+Hacer que la lectura principal de `Aprovechamiento de ventana` sea el dano total
+convertido dentro de las ventanas, no el dano por segundo.
+
+Archivos tocados:
+- `src/components/ResultsPanel.jsx`
+- `src/components/MultiSummaryPanel.jsx`
+
+Decision:
+- El valor principal pasa a ser `X dano`.
+- El dano/s, tiempo disparando y disparos/impactos quedan como detalle
+  secundario.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-13 - Fuerza G media en lugar de porcentaje de blackout
+
+Objetivo:
+Evitar que la tarjeta de blackout muestre siempre `0%` cuando ningun piloto
+llega a entrar formalmente en blackout.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/components/ResultsPanel.jsx`
+- `src/components/MultiSummaryPanel.jsx`
+- `src/hooks/useSimulator.js`
+
+Decision:
+- El motor calcula `gForceAvg` como media de G durante maniobras relevantes.
+- La UI cambia la fila `Blackout` por `Fuerza G media`.
+- El dato principal es la G media y el detalle muestra el pico estimado.
+- El resumen multiple usa la media de `gForceAvg` por nave.
+
+Verificacion:
+- Arrow vs Gladius skill 5 devuelve media aproximada de 8.1 G para Arrow y
+  4.5 G para Gladius, aunque blackout formal siga en 0%.
+- `npm run build` correcto.
+
+### 2026-05-13 - Graficas agrupadas y ampliables
+
+Objetivo:
+Mejorar la lectura de la zona de graficas agrupandolas por tema y permitiendo
+inspeccionarlas en grande.
+
+Archivos tocados:
+- `src/components/Charts.jsx`
+- `src/index.css`
+
+Decision:
+- Las graficas se agrupan en:
+  - `Supervivencia`;
+  - `Dano aplicado`;
+  - `Maniobra`.
+- Cada grupo usa una grid de maximo dos columnas.
+- Cada grafica tiene un boton de ampliar.
+- La vista ampliada abre un modal de pantalla grande y se puede cerrar con el
+  boton, fondo o `Escape`.
+
+Verificacion:
+- `npm run build` correcto.
+- En el visualizador se confirmaron 3 grupos, 6 botones de ampliar y apertura /
+  cierre correcto de una grafica ampliada.
+
+### 2026-05-13 - Errores de piloto y variabilidad entre combates medios
+
+Objetivo:
+Evitar que duelos de pilotos medios sean demasiado deterministas. La Gladius
+debe ser favorita contra Arrow a skill 5, pero la Arrow no deberia tener 0%
+de opciones en tandas grandes.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/App.jsx`
+
+Decision:
+- Se introduce una capa de forma/ejecucion por combate (`pilotFormRoll`) que
+  representa entradas buenas o malas al merge, sobrecorrecciones y perdida de
+  ritmo durante el dogfight.
+- Se anaden errores tacticos de tick: mala gestion de rango y perdida temporal
+  de control de fuego.
+- La probabilidad base de error se centra conceptualmente en skill 5 y baja al
+  subir la habilidad; las naves mas exigentes sufren mas estos errores antes de
+  ser dominadas.
+- El popup `Como funciona` define que significa un fallo dentro del modelo.
+
+Verificacion:
+- Arrow vs Gladius, 300 simulaciones por punto:
+  - skill 5: Arrow 9.7%, Gladius 65.7%, empates 24.7%.
+  - skill 6: Arrow 22.0%, Gladius 52.7%, empates 25.3%.
+  - skill 7: Arrow 41.0%, Gladius 34.7%, empates 24.3%.
+  - skill 8: Arrow 81.0%, Gladius 7.7%, empates 11.3%.
+
+### 2026-05-12 - Compatibilidad de armas por slot y correccion de Titan
+
+Objetivo:
+Corregir naves como la Avenger Titan, donde un hardpoint grande puede llevar un
+arma stock de menor tamano y la UI estaba interpretandolo como un duplicado "de
+serie".
+
+Archivos tocados:
+- `src/data/ships.js`
+
+Decision:
+- El emparejamiento de armas stock con slots deja de hacerse por tamano exacto y
+  pasa a usar compatibilidad `arma <= slot`.
+- El stock se asigna al slot compatible mas pequeno posible, para no comerse
+  armas auxiliares como las S1 de la Arrow.
+- Las opciones del configurador tambien aceptan armas de hasta el tamano del
+  hardpoint y muestran el tamano real del arma en la etiqueta.
+- Cuando un slot monta un arma menor que su hardpoint, la UI lo aclara con
+  `arma Sx`.
+
+Impacto:
+- La Avenger Titan pasa a mostrar 3 armas reales coherentes, sin cuarta arma
+  "de serie" duplicada.
+- La Arrow mantiene sus 2 Panthers configurables y sus 2 YellowJacket S1 como
+  armas de serie, sin regresiones.
+
+### 2026-05-12 - Limpieza de Mustang Alpha y Aurora MR
+
+Objetivo:
+Eliminar dos incoherencias residuales del configurador: naves con slots vacios
+rellenados artificialmente y naves cuyo stock real supera el tamano bruto del
+slot importado.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/components/ShipCard.jsx`
+
+Decision:
+- Los slots vacios dejan de autocompletarse con un arma fallback inventada.
+- Cuando una nave tiene menos armas cargadas que slots compatibles, la UI muestra
+  `Sin arma cargada` en esos huecos.
+- Si el stock real trae un arma mayor que el slot importado, el slot se ajusta
+  al tamano realmente montado para que la ficha no cree armas "de serie"
+  ficticias.
+- La cabecera pasa a usar `X armas cargadas` cuando conviene diferenciar entre
+  armas montadas y numero total de slots configurables.
+
+Impacto:
+- Mustang Alpha: ahora muestra 2 `CF-227 Badger Repeater` como armas cargadas,
+  sin duplicados ni armas de serie falsas.
+- Aurora MR: ahora muestra 2 `CF-117 Bulldog Repeater` cargadas y 2 slots vacios
+  explicitamente, en lugar de inventar dos armas adicionales.
+
+### 2026-05-12 - Sustitucion de Alfa/Beta por nombres de nave
+
+Objetivo:
+Eliminar los terminos abstractos `Alfa` y `Beta` en la UI y usar los nombres
+reales de las naves para que la lectura del combate sea mas natural.
+
+Archivos tocados:
+- `src/App.jsx`
+- `src/components/ShipCard.jsx`
+- `src/components/SimControls.jsx`
+- `src/components/MultiSummaryPanel.jsx`
+- `src/components/SimRunsSidebar.jsx`
+- `src/engine/combatEngine.js`
+
+Decision:
+- Las tarjetas de nave, sliders de piloto, historial de runs y resumen multiple
+  pasan a usar el nombre real de cada nave.
+- El modo estatico muestra `Dispara <nave>` en lugar de `Dispara Alfa/Beta`.
+- Los eventos iniciales del combate tambien usan nombres reales en deteccion y
+  banco estatico.
+
+Impacto:
+- La app lee de forma mas clara en comparativas reales, sobre todo cuando se
+  revisan muchas simulaciones o capturas compartidas.
 - Prueba controlada con dano continuo:
   - escudo baja de 50 a 0;
   - permanece a 0 durante todo el fuego continuo;
@@ -1906,6 +2446,226 @@ El cambio se hizo de extremo a extremo:
 Verificacion:
 - `npm run build` correcto.
 - El visualizador mostro `20.0 km` en `Rango de deteccion (base)`.
+
+### 2026-05-12 - Calibracion Arrow vs Gladius por nivel de piloto
+
+Objetivo:
+Hacer que la eficacia real de la Arrow en combate se parezca mas a la curva
+de maestria mostrada en UI frente a una Gladius con el mismo nivel de piloto.
+
+Archivo tocado:
+- `src/engine/combatEngine.js`
+
+Decision:
+Se recalibro `pilotExpressionRoll()` para las naves exigentes:
+- la ventana de "despegue" de la Arrow se concentra mejor alrededor de skill 6;
+- el crecimiento de skill 7 se suaviza un poco;
+- el tramo 7.5+ gana mas peso, para que skill 8 refleje mejor su techo.
+
+Verificacion:
+- Muestreo Arrow vs Gladius, `3 min`, mismas skills, `160` semillas:
+  - skill `6` -> Arrow gana `26.25%`
+  - skill `7` -> Arrow gana `54.37%`
+  - skill `8` -> Arrow gana `73.75%`
+- Esto deja el comportamiento muy cerca del objetivo de referencia:
+  `25% / 50% / 75%`.
+
+### 2026-05-12 - Resumen multiple con Body, balistica y recargas
+
+Objetivo:
+Hacer mas util el resumen agregado de multiples simulaciones, mostrando que tan
+cerca estuvo cada nave de morir y anadiendo estado final de balistica y
+recargas de armas.
+
+Archivos tocados:
+- `src/engine/combatEngine.js`
+- `src/hooks/useSimulator.js`
+- `src/components/MultiSummaryPanel.jsx`
+
+Decision:
+- Se anadio `weaponReloads` a las stats del motor contando las veces que una
+  nave tuvo que cortar fuego para recuperar capacitor de armas.
+- El resumen agregado ahora incluye `Body medio restante` separado de `Hull`.
+- Si la nave lleva armas balisticas, el resumen muestra la municion balistica
+  media restante y el total acumulado al final de la tanda.
+- El resumen muestra tambien el total de recargas de armas y la media por
+  combate.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-12 - Datos de balistica y recargas en cada combate
+
+Objetivo:
+Mostrar tambien en la ficha de cada simulacion individual la municion
+balistica restante y las recargas de armas al terminar el combate.
+
+Archivo tocado:
+- `src/components/ResultsPanel.jsx`
+
+Decision:
+- Si la nave lleva balistica, la ficha ahora muestra la municion restante y su
+  porcentaje final.
+- Siempre se muestra el numero de recargas de armas durante ese combate.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-12 - Foto de nave en la ficha
+
+Objetivo:
+Mostrar una imagen de la nave seleccionada dentro de cada ficha para mejorar la
+identificacion visual de cada bando.
+
+Archivos tocados:
+- `src/components/ShipCard.jsx`
+- `src/index.css`
+
+Decision:
+- Se anadio una imagen hero debajo del nombre de la nave.
+- La URL se construye contra Star Citizen Wiki usando redireccion por nombre de
+  archivo y algunos overrides para modelos frecuentes.
+- Si alguna imagen no existe o falla, la ficha muestra un fallback limpio con
+  icono.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-12 - Correccion de loadout stock real y armas fijas auxiliares
+
+Objetivo:
+Corregir un desajuste entre el loadout mostrado en UI y el loadout realmente
+simulado cuando se cargaban armas stock desde la Star Citizen Wiki API, sin
+perder armas fijas reales que no forman parte de los slots configurables.
+
+Archivo tocado:
+- `src/data/ships.js`
+
+Decision:
+- Se mantiene el loadout stock real completo de la API, incluidas armas fijas
+  auxiliares como las `YellowJacket` S1 de la Arrow.
+- La UI de loadout ahora separa mejor:
+  - armas configurables por slot;
+  - armas fijas auxiliares que tambien participan en la simulacion.
+- Los presets y loadouts personalizados conservan esas armas fijas auxiliares
+  en lugar de eliminarlas por error.
+
+Impacto:
+- La Arrow stock vuelve a ser coherente con lo que muestra y simula:
+  dos Panthers S3 + dos YellowJacket S1 fijas.
+- La municion balistica en la Arrow vuelve a ser legitima y ya no un artefacto
+  fantasma de la UI.
+- La calibracion Arrow vs Gladius recupera el comportamiento esperado:
+  - skill `6` -> `23.13%`
+  - skill `7` -> `47.50%`
+  - skill `8` -> `76.88%`
+- Arrow vs Guardian vuelve a escalar de forma razonable:
+  - `8 vs 5` -> `70%` de victorias para Arrow
+
+Verificacion:
+- Arrow stock visible y simulado: `2x Panther S3 + 2x YellowJacket S1`.
+- `npm run build` correcto.
+
+### 2026-05-12 - Claridad UI para armas fijas
+
+Objetivo:
+Evitar que la ficha de nave parezca incoherente cuando una nave tiene mas armas
+reales de las que el usuario puede configurar manualmente.
+
+Archivos tocados:
+- `src/components/ShipCard.jsx`
+- `src/index.css`
+
+Decision:
+- El subtitulo de la ficha ahora separa `configurables` y `fijas` cuando aplica.
+- Se anadio un bloque `Armas fijas de serie` dentro del configurador para
+  mostrar las armas auxiliares que participan en la simulacion pero no forman
+  parte de los slots editables.
+
+Verificacion:
+- La Arrow ya no muestra `4 armas` sin contexto: ahora aclara `2 configurables
+  + 2 fijas`.
+
+### 2026-05-12 - Lenguaje visual consistente para sistemas editables y fijos
+
+Objetivo:
+Extender la misma logica visual a componentes y sistemas de la nave para que el
+usuario distinga rapido que puede tocar y que pertenece al equipamiento fijo.
+
+Archivos tocados:
+- `src/components/ShipCard.jsx`
+- `src/index.css`
+
+Decision:
+- Los bloques de `Armas compatibles` y `Componentes compatibles` muestran ahora
+  una marca `Editable`.
+- La ficha queda preparada para mostrar `Sistemas fijos de serie` cuando la API
+  exponga componentes reales no configurables en naves futuras.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-12 - Cambio terminologico de "fijas" a "de serie"
+
+Objetivo:
+Evitar confundir "montaje fijo" con "no configurable" en armas y sistemas de
+la nave.
+
+Archivos tocados:
+- `src/data/ships.js`
+- `src/components/ShipCard.jsx`
+
+Decision:
+- Se renombra la UI de `Armas fijas de serie` a `Armas de serie`.
+- El resumen de cabecera pasa de `+ X fijas` a `+ X de serie`.
+- El badge pasa a `No configurable`, que describe mejor la limitacion real de
+  la UI.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-13 - Boton de ayuda y popup de logica de simulacion
+
+Objetivo:
+Dar al usuario una explicacion clara de como piensa el simulador sin obligarle
+a salir de la pantalla principal ni revisar documentacion externa.
+
+Archivos tocados:
+- `src/App.jsx`
+- `src/index.css`
+
+Decision:
+- Se anade un boton `Como funciona` alineado con el titulo principal.
+- El boton abre un popup modal con una explicacion resumida de deteccion,
+  ventanas de tiro, escudos, hull, body, modos de simulacion y lectura de
+  resultados.
+- El popup puede cerrarse tocando fuera, con el boton de cierre o con `Escape`.
+
+Verificacion:
+- `npm run build` correcto.
+
+### 2026-05-13 - Detalle del modelo de precision, evasion y ventana
+
+Objetivo:
+Hacer mas transparente la parte menos evidente del simulador: como se calculan
+precision, maniobrabilidad, evasion y ventana de oportunidad, y como afectan al
+resultado final.
+
+Archivos tocados:
+- `src/App.jsx`
+- `src/index.css`
+
+Decision:
+- El popup `Como funciona` incluye ahora secciones especificas para Precision,
+  Maniobrabilidad, Evasion y Ventana de disparo.
+- Se explica que la ventana de oportunidad no es dano directo, sino una lectura
+  de calidad del momento de tiro que modula tiempo efectivo de fuego,
+  probabilidad de impacto y dano aplicado.
+- Se anaden formulas simplificadas en bloques visuales para facilitar confianza
+  y trazabilidad sin exponer todo el codigo del motor.
+
+Verificacion:
+- `npm run build` correcto.
 
 ## Notas para futuros modelos
 
